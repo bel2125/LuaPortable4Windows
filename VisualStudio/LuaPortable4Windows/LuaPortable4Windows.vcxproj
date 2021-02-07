@@ -1,0 +1,252 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{FF876BFD-9CB2-4956-B087-18B86F581242}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>LuaPortable4Windows</RootNamespace>
+    <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>LUA_COMPAT_MATHLIB;WIN32;_DEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <SDLCheck>true</SDLCheck>
+      <AdditionalIncludeDirectories>$(ProjectDir)/../../src/;$(ProjectDir)/../../src/lua-5.4.2/src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PrecompiledHeaderFile />
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <SDLCheck>true</SDLCheck>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>LUA_COMPAT_MATHLIB;WIN32;NDEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <SDLCheck>true</SDLCheck>
+      <AdditionalIncludeDirectories>$(ProjectDir)/../../src/;$(ProjectDir)/../../src/lua-5.4.2/src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PrecompiledHeaderFile />
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <SDLCheck>true</SDLCheck>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\src\crypto-algorithms\aes.c" />
+    <ClCompile Include="..\..\src\crypto-algorithms\arcfour.c" />
+    <ClCompile Include="..\..\src\crypto-algorithms\base64.c" />
+    <ClCompile Include="..\..\src\crypto-algorithms\blowfish.c" />
+    <ClCompile Include="..\..\src\crypto-algorithms\des.c" />
+    <ClCompile Include="..\..\src\crypto-algorithms\lcrypto.c" />
+    <ClCompile Include="..\..\src\crypto-algorithms\md2.c" />
+    <ClCompile Include="..\..\src\crypto-algorithms\md5.c" />
+    <ClCompile Include="..\..\src\crypto-algorithms\rot-13.c" />
+    <ClCompile Include="..\..\src\crypto-algorithms\sha1.c" />
+    <ClCompile Include="..\..\src\crypto-algorithms\sha256.c" />
+    <ClCompile Include="..\..\src\lfs\lfs.c" />
+    <ClCompile Include="..\..\src\lp4w_openlibs.c" />
+    <ClCompile Include="..\..\src\lsqlite\lsqlite3.c" />
+    <ClCompile Include="..\..\src\lsqlite\sqlite3.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\lapi.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\lauxlib.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\lbaselib.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\lcode.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\lcorolib.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\lctype.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\ldblib.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\ldebug.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\ldo.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\ldump.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\lfunc.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\lgc.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\linit.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\liolib.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\llex.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\lmathlib.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\lmem.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\loadlib.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\lobject.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\lopcodes.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\loslib.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\lparser.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\lstate.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\lstring.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\lstrlib.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\ltable.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\ltablib.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\ltm.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\lundump.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\lutf8lib.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\lvm.c" />
+    <ClCompile Include="..\..\src\lua-5.4.2\src\lzio.c" />
+    <ClCompile Include="..\..\src\lua.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\src\crypto-algorithms\aes.h" />
+    <ClInclude Include="..\..\src\crypto-algorithms\arcfour.h" />
+    <ClInclude Include="..\..\src\crypto-algorithms\base64.h" />
+    <ClInclude Include="..\..\src\crypto-algorithms\blowfish.h" />
+    <ClInclude Include="..\..\src\crypto-algorithms\des.h" />
+    <ClInclude Include="..\..\src\crypto-algorithms\md2.h" />
+    <ClInclude Include="..\..\src\crypto-algorithms\md5.h" />
+    <ClInclude Include="..\..\src\crypto-algorithms\rot-13.h" />
+    <ClInclude Include="..\..\src\crypto-algorithms\sha1.h" />
+    <ClInclude Include="..\..\src\crypto-algorithms\sha256.h" />
+    <ClInclude Include="..\..\src\lfs\lfs.h" />
+    <ClInclude Include="..\..\src\lsqlite\sqlite3.h" />
+    <ClInclude Include="..\..\src\lua-5.4.2\src\lapi.h" />
+    <ClInclude Include="..\..\src\lua-5.4.2\src\lauxlib.h" />
+    <ClInclude Include="..\..\src\lua-5.4.2\src\lcode.h" />
+    <ClInclude Include="..\..\src\lua-5.4.2\src\lctype.h" />
+    <ClInclude Include="..\..\src\lua-5.4.2\src\ldebug.h" />
+    <ClInclude Include="..\..\src\lua-5.4.2\src\ldo.h" />
+    <ClInclude Include="..\..\src\lua-5.4.2\src\lfunc.h" />
+    <ClInclude Include="..\..\src\lua-5.4.2\src\lgc.h" />
+    <ClInclude Include="..\..\src\lua-5.4.2\src\ljumptab.h" />
+    <ClInclude Include="..\..\src\lua-5.4.2\src\llex.h" />
+    <ClInclude Include="..\..\src\lua-5.4.2\src\llimits.h" />
+    <ClInclude Include="..\..\src\lua-5.4.2\src\lmem.h" />
+    <ClInclude Include="..\..\src\lua-5.4.2\src\lobject.h" />
+    <ClInclude Include="..\..\src\lua-5.4.2\src\lopcodes.h" />
+    <ClInclude Include="..\..\src\lua-5.4.2\src\lopnames.h" />
+    <ClInclude Include="..\..\src\lua-5.4.2\src\lparser.h" />
+    <ClInclude Include="..\..\src\lua-5.4.2\src\lprefix.h" />
+    <ClInclude Include="..\..\src\lua-5.4.2\src\lstate.h" />
+    <ClInclude Include="..\..\src\lua-5.4.2\src\lstring.h" />
+    <ClInclude Include="..\..\src\lua-5.4.2\src\ltable.h" />
+    <ClInclude Include="..\..\src\lua-5.4.2\src\ltm.h" />
+    <ClInclude Include="..\..\src\lua-5.4.2\src\lua.h" />
+    <ClInclude Include="..\..\src\lua-5.4.2\src\luaconf.h" />
+    <ClInclude Include="..\..\src\lua-5.4.2\src\lualib.h" />
+    <ClInclude Include="..\..\src\lua-5.4.2\src\lundump.h" />
+    <ClInclude Include="..\..\src\lua-5.4.2\src\lvm.h" />
+    <ClInclude Include="..\..\src\lua-5.4.2\src\lzio.h" />
+    <ClInclude Include="..\..\src\lua_all.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\src\crypto-algorithms\README.md" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

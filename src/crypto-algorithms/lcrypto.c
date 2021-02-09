@@ -8,13 +8,37 @@
 #endif
 
 #include "lua_all.h"
+
+#include "aes.h"
+#include "arcfour.h"
 #include "base64.h"
 #include "blowfish.h"
+#include "des.h"
 #include "md2.h"
 #include "md5.h"
 #include "sha1.h"
 #include "sha256.h"
 #include "rot-13.h"
+
+typedef struct tL_AES_KEY {
+	uint64_t schedule[60];
+	int bit_size;
+	int byte_size;
+} L_AES_KEY;
+
+typedef struct tL_RC4_KEY{
+	BYTE schedule[256];
+} L_RC4_KEY;
+
+typedef struct tL_DES_KEY {
+  BYTE schedule[3][16][6];
+  BYTE encode;
+  BYTE isThree;
+} L_DES_KEY;
+
+typedef struct tL_BLOWFISH_KEY {
+	BLOWFISH_KEY schedule;
+} L_BLOWFISH_KEY;
 
 
 static int lua_base64_encode(lua_State *L)
@@ -40,6 +64,7 @@ static int lua_base64_encode(lua_State *L)
 	}
 	size_t out_len2 = base64_encode(in, out, in_len, newline);
 	if (out_len != out_len2) {
+		free(out);
 		return luaL_error(L, "%s consistency error", __func__);
 	}
 	lua_pushlstring(L, out, out_len);
@@ -63,6 +88,7 @@ static int lua_base64_decode(lua_State *L)
 	}
 	size_t out_len2 = base64_decode(in, out, in_len);
 	if (out_len != out_len2) {
+		free(out);
 		return luaL_error(L, "%s consistency error", __func__);
 	}
 	lua_pushlstring(L, out, out_len);
@@ -71,10 +97,128 @@ static int lua_base64_decode(lua_State *L)
 }
 
 
+static int lua_aes_preparekey(lua_State *L)
+{
+	if (lua_type(L, 1) != LUA_TSTRING) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+	if (lua_type(L, 2) != LUA_TNUMBER) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+
+	size_t key_len = 0;
+	const char *key = lua_tolstring(L, 1, &key_len);
+	int key_len_bits = (int)key_len * 8;
+
+	double arg2 = lua_tonumber(L, 2);
+
+	if ((arg2 != 128) && (arg2 != 192) && (arg2 != 256)) {
+		return luaL_error(L, "%s out of memory", __func__);
+	}
+	if (arg2 < key_len_bits) {
+		return luaL_error(L, "%s out of memory", __func__);
+	}
+	key_len_bits = (int)arg2;
+
+	L_AES_KEY *pkeystruct = (L_AES_KEY *)lua_newuserdata(L, sizeof(L_AES_KEY));
+	if (pkeystruct == NULL) {
+		return luaL_error(L, "%s out of memory", __func__);
+	}
+	lua_pushlightuserdata(L, &lua_aes_preparekey);
+	lua_setuservalue(L, -2);
+
+	pkeystruct->bit_size = key_len_bits;
+	pkeystruct->byte_size = key_len_bits/8;
+	char key32[32];
+	memset(key32, 0, sizeof(key32));
+	memcpy(key32, key, key_len);
+	aes_key_setup(key32, pkeystruct->schedule, key_len_bits);
+	return 1;
+}
+
+
+static int lua_aes_encrypt(lua_State *L)
+{
+	if (lua_type(L, 1) != LUA_TSTRING) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+	if (lua_type(L, 2) != LUA_TUSERDATA) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+	lua_getuservalue(L, 2);
+	if (lua_type(L, -1) != LUA_TLIGHTUSERDATA) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+	void *p = lua_touserdata(L, -1);
+	if (p != (void*)lua_aes_preparekey) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+	lua_pop(L, 1);
+
+	size_t in_len = 0;
+	const char *in = lua_tolstring(L, 1, &in_len);
+	L_AES_KEY *pkeystruct = (L_AES_KEY *)lua_touserdata(L, -1);
+
+	char *data = calloc(in_len + 32, 1);
+	if (data == NULL) {
+		return luaL_error(L, "%s out of memory", __func__);
+	}
+	memcpy(data, in, in_len);
+	int b = pkeystruct->byte_size;
+	in_len = ((in_len + (b - 1)) / b) * b;
+
+	for (size_t i = 0; i < in_len; i += b) {
+		aes_encrypt(data + i, data + i, pkeystruct->schedule, pkeystruct->bit_size);
+	}
+
+	lua_pushlstring(L, data, in_len);
+	free(data);
+	return 1;
+}
+
+
+static int lua_aes_decrypt(lua_State *L)
+{
+	if (lua_type(L, 1) != LUA_TSTRING) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+	if (lua_type(L, 2) != LUA_TUSERDATA) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+	lua_getuservalue(L, 2);
+	if (lua_type(L, -1) != LUA_TLIGHTUSERDATA) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+	void *p = lua_touserdata(L, -1);
+	if (p != (void*)lua_aes_preparekey) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+	lua_pop(L, 1);
+
+	size_t in_len = 0;
+	const char *in = lua_tolstring(L, 1, &in_len);
+	L_AES_KEY *pkeystruct = (L_AES_KEY *)lua_touserdata(L, -1);
+
+	char *data = calloc(in_len + 32, 1);
+	if (data == NULL) {
+		return luaL_error(L, "%s out of memory", __func__);
+	}
+	memcpy(data, in, in_len);
+	int b = pkeystruct->byte_size;
+	in_len = ((in_len + (b - 1)) / b) * b;
+
+	for (size_t i = 0; i < in_len; i += b) {
+		aes_decrypt(data + i, data + i, pkeystruct->schedule, pkeystruct->bit_size);
+	}
+
+	lua_pushlstring(L, data, in_len);
+	free(data);
+	return 1;
+}
+
+
 static int lua_blowfish_preparekey(lua_State *L)
 {
-	int newline = 0;
-
 	if (lua_type(L, 1) != LUA_TSTRING) {
 		return luaL_error(L, "%s parameter error", __func__);
 	}
@@ -82,21 +226,19 @@ static int lua_blowfish_preparekey(lua_State *L)
 	size_t key_len = 0;
 	const char *key = lua_tolstring(L, 1, &key_len);
 
-	BLOWFISH_KEY *pkeystruct = (BLOWFISH_KEY *)lua_newuserdata(L, sizeof(BLOWFISH_KEY));
+	L_BLOWFISH_KEY *pkeystruct = (L_BLOWFISH_KEY *)lua_newuserdata(L, sizeof(BLOWFISH_KEY));
 	if (pkeystruct == NULL) {
 		return luaL_error(L, "%s out of memory", __func__);
 	}
 	lua_pushlightuserdata(L, &lua_blowfish_preparekey);
 	lua_setuservalue(L, -2);
-	blowfish_key_setup(key, pkeystruct, key_len);
-	return 1;
+	blowfish_key_setup(key, &(pkeystruct->schedule), key_len);
+	return 1; 
 }
 
 
 static int lua_blowfish_encrypt(lua_State *L)
 {
-	int newline = 0;
-
 	if (lua_type(L, 1) != LUA_TSTRING) {
 		return luaL_error(L, "%s parameter error", __func__);
 	}
@@ -115,14 +257,218 @@ static int lua_blowfish_encrypt(lua_State *L)
 
 	size_t in_len = 0;
 	const char *in = lua_tolstring(L, 1, &in_len);
-	BLOWFISH_KEY *pkeystruct = (BLOWFISH_KEY *)lua_touserdata(L, -1);
-	char out[8];
-	blowfish_encrypt(in, out, pkeystruct);
-	lua_pushlstring(L, out, 8);
+	L_BLOWFISH_KEY *pkeystruct = (L_BLOWFISH_KEY *)lua_touserdata(L, -1);
+
+	char *data = calloc(in_len + 8, 1);
+	if (data == NULL) {
+		return luaL_error(L, "%s out of memory", __func__);
+	}
+	memcpy(data, in, in_len);
+	in_len = ((in_len + 7) / 8) * 8;
+
+	for (size_t i = 0; i < in_len; i += 8) {
+		blowfish_encrypt(data + i, data + i, &(pkeystruct->schedule));
+	}
+
+	lua_pushlstring(L, data, in_len);
+	free(data);
 	return 1;
 }
 
 
+static int lua_blowfish_decrypt(lua_State *L)
+{
+	if (lua_type(L, 1) != LUA_TSTRING) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+	if (lua_type(L, 2) != LUA_TUSERDATA) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+	lua_getuservalue(L, 2);
+	if (lua_type(L, -1) != LUA_TLIGHTUSERDATA) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+	void *p = lua_touserdata(L, -1);
+	if (p != (void*)lua_blowfish_preparekey) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+	lua_pop(L, 1);
+
+	size_t in_len = 0;
+	const char *in = lua_tolstring(L, 1, &in_len);
+	L_BLOWFISH_KEY *pkeystruct = (L_BLOWFISH_KEY *)lua_touserdata(L, -1);
+
+	char *data = calloc(in_len + 8, 1);
+	if (data == NULL) {
+		return luaL_error(L, "%s out of memory", __func__);
+	}
+	memcpy(data, in, in_len);
+	in_len = ((in_len + 7) / 8) * 8;
+
+	for (size_t i = 0; i < in_len; i += 8) {
+		blowfish_decrypt(data + i, data + i, &(pkeystruct->schedule));
+	}
+
+	lua_pushlstring(L, data, in_len);
+	free(data);
+	return 1;
+}
+
+
+static int lua_rc4_preparekey(lua_State *L)
+{
+	if (lua_type(L, 1) != LUA_TSTRING) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+
+	size_t key_len = 0;
+	const char *key = lua_tolstring(L, 1, &key_len);
+
+	L_RC4_KEY *pkeystruct = (L_RC4_KEY *)lua_newuserdata(L, sizeof(L_RC4_KEY));
+	if (pkeystruct == NULL) {
+		return luaL_error(L, "%s out of memory", __func__);
+	}
+	lua_pushlightuserdata(L, &lua_rc4_preparekey);
+	lua_setuservalue(L, -2);
+	arcfour_key_setup(pkeystruct->schedule, key, key_len);
+	return 1;
+}
+
+
+static int lua_rc4(lua_State *L)
+{
+	if (lua_type(L, 1) != LUA_TSTRING) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+	if (lua_type(L, 2) != LUA_TUSERDATA) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+	lua_getuservalue(L, 2);
+	if (lua_type(L, -1) != LUA_TLIGHTUSERDATA) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+	void *p = lua_touserdata(L, -1);
+	if (p != (void*)lua_rc4_preparekey) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+	lua_pop(L, 1);
+
+	size_t in_len = 0;
+	const char *in = lua_tolstring(L, 1, &in_len);
+	L_RC4_KEY *pkeystruct = (L_RC4_KEY *)lua_touserdata(L, -1);
+
+	char *data = malloc(in_len + 1);
+	if (data == NULL) {
+		return luaL_error(L, "%s out of memory", __func__);
+	}
+
+	arcfour_generate_stream(pkeystruct->schedule, data, in_len);
+	for (size_t i = 0; i < in_len; i++) {
+		data[i] = data[i] ^ in[i];
+	}
+	lua_pushlstring(L, data, in_len);
+	free(data);
+	return 1;
+}
+
+
+static int lua_des_preparekey(lua_State *L)
+{
+	if (lua_type(L, 1) != LUA_TSTRING) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+	if (lua_type(L, 2) != LUA_TBOOLEAN) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+	if (lua_type(L, 3) != LUA_TBOOLEAN) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+
+	size_t key_len = 0;
+	const char *key = lua_tolstring(L, 1, &key_len);
+
+	int encrypt = lua_toboolean(L, 2);
+	int use3DES = lua_toboolean(L, 3);
+
+	if (key_len < 1) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+	if (use3DES && (key_len > 24)) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+	if (!use3DES && (key_len > 8)) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+
+	L_DES_KEY *pkeystruct = (L_DES_KEY *)lua_newuserdata(L, sizeof(L_DES_KEY));
+	if (pkeystruct == NULL) {
+		return luaL_error(L, "%s out of memory", __func__);
+	}
+	lua_pushlightuserdata(L, &lua_des_preparekey);
+	lua_setuservalue(L, -2);
+
+	pkeystruct->isThree = !!use3DES;
+	pkeystruct->encode = !!encrypt;
+
+	if (use3DES) {
+		char key24[24];
+		memset(key24, 0, sizeof(key24));
+		memcpy(key24, key, key_len);
+		three_des_key_setup(key24, pkeystruct->schedule, encrypt ? DES_ENCRYPT : DES_DECRYPT);
+	} else {
+		char key8[8];
+		memset(key8, 0, sizeof(key8));
+		memcpy(key8, key, key_len);
+		des_key_setup(key8, pkeystruct->schedule, encrypt ? DES_ENCRYPT : DES_DECRYPT);
+	}
+	return 1;
+}
+
+
+static int lua_des(lua_State *L)
+{
+	if (lua_type(L, 1) != LUA_TSTRING) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+	if (lua_type(L, 2) != LUA_TUSERDATA) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+	lua_getuservalue(L, 2);
+	if (lua_type(L, -1) != LUA_TLIGHTUSERDATA) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+	void *p = lua_touserdata(L, -1);
+	if (p != (void*)lua_des_preparekey) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+	lua_pop(L, 1);
+
+	size_t in_len = 0;
+	const char *in = lua_tolstring(L, 1, &in_len);
+	L_DES_KEY *pkeystruct = (L_DES_KEY *)lua_touserdata(L, -1);
+
+	char *data = calloc(in_len + 8, 1);
+	if (data == NULL) {
+		return luaL_error(L, "%s out of memory", __func__);
+	}
+	memcpy(data, in, in_len);
+	in_len = ((in_len + 7) / 8) * 8;
+
+	if (pkeystruct->isThree) {
+		for (size_t i = 0; i < in_len; i += 8) {
+			three_des_crypt(data + i, data + i, pkeystruct->schedule);
+		}
+	}
+	else {
+		for (size_t i = 0; i < in_len; i += 8) {
+			des_crypt(data + i, data + i, pkeystruct->schedule);
+		}
+	}
+
+	lua_pushlstring(L, data, in_len);
+	free(data);
+	return 1;
+}
 
 
 static int lua_rot13(lua_State *L)
@@ -387,8 +733,16 @@ static const struct luaL_Reg funclist[] = {
 	{ "hex_encode", lua_hex_encode },
 	{ "hex_decode", lua_hex_decode },
 
+	{ "aes_preparekey", lua_aes_preparekey },
+	{ "aes_encrypt", lua_aes_encrypt },
+	{ "aes_decrypt", lua_aes_decrypt },
 	{ "blowfish_preparekey", lua_blowfish_preparekey },
 	{ "blowfish_encrypt", lua_blowfish_encrypt },
+	{ "blowfish_decrypt", lua_blowfish_decrypt },
+	{ "rc4_preparekey", lua_rc4_preparekey },
+	{ "rc4", lua_rc4 },
+	{ "des_preparekey", lua_des_preparekey },
+	{ "des", lua_des },
 
 	{ "crc16", lua_crc16 },
 	{ "crc32", lua_crc32 },

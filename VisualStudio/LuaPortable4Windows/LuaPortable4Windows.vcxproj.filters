@@ -25,6 +25,9 @@
     <Filter Include="Source Files\crypto">
       <UniqueIdentifier>{7124d043-3a9d-4058-a6e1-797394cf147e}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\windows">
+      <UniqueIdentifier>{907a7aa2-82e8-42f4-b170-767f769ad57e}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\lua-5.4.2\src\lapi.c">
@@ -170,6 +173,9 @@
     </ClCompile>
     <ClCompile Include="..\..\src\crypto-algorithms\lcrypto.c">
       <Filter>Source Files\crypto</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\windows\lwindows.c">
+      <Filter>Source Files\windows</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

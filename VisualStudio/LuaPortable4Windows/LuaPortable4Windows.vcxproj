@@ -200,6 +200,7 @@
     <ClCompile Include="..\..\src\lua-5.4.2\src\lvm.c" />
     <ClCompile Include="..\..\src\lua-5.4.2\src\lzio.c" />
     <ClCompile Include="..\..\src\lua.c" />
+    <ClCompile Include="..\..\src\windows\lwindows.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\crypto-algorithms\aes.h" />

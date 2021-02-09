@@ -3,6 +3,7 @@
 #include "lfs/lfs.h"
 extern int luaopen_lsqlite3(lua_State *L);
 extern int luaopen_crypto(lua_State *L);
+extern int luaopen_windows(lua_State *L);
 
 
 static void po_elm(lua_State *L, int arg, int recurse) 
@@ -107,6 +108,7 @@ void LUAPORTABLE4WINDOWS_OPENLIBS(lua_State *L)
 	(void)luaopen_lfs(L);
 	(void)luaopen_lsqlite3(L);
 	(void)luaopen_crypto(L);
+	(void)luaopen_windows(L);
 
 	lua_pushcfunction(L, PO);
 	lua_setglobal(L, "po");

@@ -20,16 +20,23 @@
 #include "sha256.h"
 #include "rot-13.h"
 
-static const char * mode_names[] = { "EBC", "CBC", "PCBC", "CFB", "OFB", "CTR" };
-enum cyphermode { mode_ECB = 0, mode_CBC, mode_PCBC, mode_CFB, mode_OFB, mode_CTR, mode_enum_count };
+static const char * mode_names[] = { "EBC", "CBC", "PCBC", "CFB", "OFB", "CTR", "CTR-LE" };
+enum cyphermode { mode_ECB = 0, mode_CBC, mode_PCBC, mode_CFB, mode_OFB, mode_CTR, mode_CTR_LE, mode_enum_count };
+
+typedef struct tEncDecFunc {
+	void(*Encrypt)(uint8_t *dst, uint8_t *src, void *sched);
+	void(*Decrypt)(uint8_t *dst, uint8_t *src, void *sched);
+} FUNC;
 
 typedef struct tBlockCipherBase {
+	FUNC func;
 	uint16_t bit_size;
 	uint8_t byte_size;
 	uint8_t can_encode;
 	uint8_t can_decode;
 	enum cyphermode mode;
-	uint8_t init_vector[256];
+	uint8_t init_vector[128];
+	uint8_t counter[128];
 } BLOCKCYPHERBASE;
 
 typedef struct tL_AES_KEY {
@@ -51,6 +58,57 @@ typedef struct tL_BLOWFISH_KEY {
 typedef struct tL_RC4_KEY {
 	BYTE schedule[256];
 } L_RC4_KEY;
+
+
+static void Encrypt_AES(uint8_t *dst, uint8_t *src, void *sched)
+{
+	L_AES_KEY *k = (L_AES_KEY*)sched;
+	aes_encrypt(src, dst, k->schedule, k->block.bit_size);
+}
+
+
+static void Decrypt_AES(uint8_t *dst, uint8_t *src, void *sched)
+{
+	L_AES_KEY *k = (L_AES_KEY*)sched;
+	aes_decrypt(src, dst, k->schedule, k->block.bit_size);
+}
+
+
+static void Encrypt_BLOWFISH(uint8_t *dst, uint8_t *src, void *sched)
+{
+	L_BLOWFISH_KEY *k = (L_BLOWFISH_KEY*)sched;
+	blowfish_encrypt(src, dst, &(k->schedule));
+}
+
+
+static void Decrypt_BLOWFISH(uint8_t *dst, uint8_t *src, void *sched)
+{
+	L_BLOWFISH_KEY *k = (L_BLOWFISH_KEY*)sched;
+	blowfish_decrypt(src, dst, &(k->schedule));
+}
+
+
+static void Encrypt_DES(uint8_t *dst, uint8_t *src, void *sched)
+{
+	L_DES_KEY *k = (L_DES_KEY*)sched;
+	if (k->isThree) {
+		three_des_crypt(src, dst, &(k->schedule));
+	} else {
+		des_crypt(src, dst, &(k->schedule));
+	}
+}
+
+
+static void Decrypt_DES(uint8_t *dst, uint8_t *src, void *sched)
+{
+	L_DES_KEY *k = (L_DES_KEY*)sched;
+	if (k->isThree) {
+		three_des_crypt(src, dst, &(k->schedule));
+	}
+	else {
+		des_crypt(src, dst, &(k->schedule));
+	}
+}
 
 
 static int lua_base64_encode(lua_State *L)
@@ -113,6 +171,24 @@ static void memxor(uint8_t *inout, const uint8_t * xor, size_t len)
 {
 	for (size_t i = 0; i < len; i++) {
 		inout[i] = inout[i] ^ xor[i];
+	}
+}
+
+
+static void counter_inc_le(uint8_t *inout, size_t len)
+{
+	for (size_t i = 0; i < len; i++) {
+		inout[i]++;
+		if (inout[i]) break;
+	}
+}
+
+
+static void counter_inc_be(uint8_t *inout, size_t len)
+{
+	for (size_t i = len; i > 0; i--) {
+		inout[i-1]++;
+		if (inout[i-1]) break;
 	}
 }
 
@@ -194,7 +270,7 @@ static int lua_aes_encrypt(lua_State *L)
 	switch (pkeystruct->block.mode) {
 	default:
 		for (size_t i = 0; i < in_len; i += b) {
-			aes_encrypt(data + i, data + i, pkeystruct->schedule, pkeystruct->block.bit_size);
+			Encrypt_AES(data + i, data + i, pkeystruct);
 		}
 	}
 
@@ -237,7 +313,7 @@ static int lua_aes_decrypt(lua_State *L)
 	switch (pkeystruct->block.mode) {
 	default:
 		for (size_t i = 0; i < in_len; i += b) {
-			aes_decrypt(data + i, data + i, pkeystruct->schedule, pkeystruct->block.bit_size);
+			Decrypt_AES(data + i, data + i, pkeystruct);
 		}
 	}
 
@@ -310,7 +386,7 @@ static int lua_blowfish_encrypt(lua_State *L)
 	case mode_CBC:
 		for (size_t i = 0; i < in_len; i += b) {
 			memxor(data + i, pkeystruct->block.init_vector, b);
-			blowfish_encrypt(data + i, data + i, &(pkeystruct->schedule));
+			Encrypt_BLOWFISH(data + i, data + i, pkeystruct);
 			memcpy(pkeystruct->block.init_vector, data + i, b);
 		}
 		break;
@@ -318,27 +394,36 @@ static int lua_blowfish_encrypt(lua_State *L)
 		for (size_t i = 0; i < in_len; i += b) {
 			memcpy(savevec, data + i, b);
 			memxor(pkeystruct->block.init_vector, data + i, b);
-			blowfish_encrypt(pkeystruct->block.init_vector, data + i, &(pkeystruct->schedule));
+			Encrypt_BLOWFISH(data + i, pkeystruct->block.init_vector, pkeystruct);
 			memxor(savevec, data + i, b);
 			memcpy(pkeystruct->block.init_vector, savevec, b);
 		}
 		break;
 	case mode_CFB:
 		for (size_t i = 0; i < in_len; i += b) {
-			blowfish_encrypt(pkeystruct->block.init_vector, pkeystruct->block.init_vector, &(pkeystruct->schedule));
+			Encrypt_BLOWFISH(pkeystruct->block.init_vector, pkeystruct->block.init_vector, pkeystruct);
 			memxor(data + i, pkeystruct->block.init_vector, b);
 			memcpy(pkeystruct->block.init_vector, data + i, b);
 		}
 		break;
 	case mode_OFB:
 		for (size_t i = 0; i < in_len; i += b) {
-			blowfish_encrypt(pkeystruct->block.init_vector, pkeystruct->block.init_vector, &(pkeystruct->schedule));
+			Encrypt_BLOWFISH(pkeystruct->block.init_vector, pkeystruct->block.init_vector, pkeystruct);
 			memxor(data + i, pkeystruct->block.init_vector, b);
+		}
+		break;
+	case mode_CTR:
+		for (size_t i = 0; i < in_len; i += b) {
+			memcpy(savevec, pkeystruct->block.counter, b);
+			memxor(savevec, pkeystruct->block.init_vector, b);
+			Encrypt_BLOWFISH(savevec, savevec, pkeystruct);
+			memxor(data + i, savevec, b);
+			counter_inc_be(pkeystruct->block.counter, b);
 		}
 		break;
 	default:
 		for (size_t i = 0; i < in_len; i += b) {
-			blowfish_encrypt(data + i, data + i, &(pkeystruct->schedule));
+			Encrypt_BLOWFISH(data + i, data + i, pkeystruct);
 		}
 	}
 
@@ -385,7 +470,7 @@ static int lua_blowfish_decrypt(lua_State *L)
 		for (size_t i = 0; i < in_len; i += b) {
 			memcpy(savevec, pkeystruct->block.init_vector, b);
 			memcpy(pkeystruct->block.init_vector, data + i, b);
-			blowfish_decrypt(data + i, data + i, &(pkeystruct->schedule));
+			Decrypt_BLOWFISH(data + i, data + i, pkeystruct);
 			memxor(data + i, savevec, b);
 		}
 		break;
@@ -393,7 +478,7 @@ static int lua_blowfish_decrypt(lua_State *L)
 	case mode_PCBC:
 		for (size_t i = 0; i < in_len; i += b) {
 			memcpy(savevec, data + i, b);
-			blowfish_decrypt(data + i, data + i, &(pkeystruct->schedule));
+			Decrypt_BLOWFISH(data + i, data + i, pkeystruct);
 			memxor(data + i, pkeystruct->block.init_vector, b);
 			memxor(savevec, data + i, b);
 			memcpy(pkeystruct->block.init_vector, savevec, b);
@@ -402,7 +487,7 @@ static int lua_blowfish_decrypt(lua_State *L)
 	case mode_CFB:
 		for (size_t i = 0; i < in_len; i += b) {
 			/* use ENCRYPT, not DECRYPT here */
-			blowfish_encrypt(pkeystruct->block.init_vector, savevec, &(pkeystruct->schedule));
+			Encrypt_BLOWFISH(savevec, pkeystruct->block.init_vector, pkeystruct);
 			memcpy(pkeystruct->block.init_vector, data + i, b);
 			memxor(data + i, savevec, b);
 		}
@@ -410,14 +495,23 @@ static int lua_blowfish_decrypt(lua_State *L)
 	case mode_OFB:
 		for (size_t i = 0; i < in_len; i += b) {
 			/* use ENCRYPT, not DECRYPT here */
-			blowfish_encrypt(pkeystruct->block.init_vector, pkeystruct->block.init_vector, &(pkeystruct->schedule));
+			Encrypt_BLOWFISH(pkeystruct->block.init_vector, pkeystruct->block.init_vector, pkeystruct);
 			memxor(data + i, pkeystruct->block.init_vector, b);
 		}
 		break;
-
+	case mode_CTR:
+		for (size_t i = 0; i < in_len; i += b) {
+			memcpy(savevec, pkeystruct->block.counter, b);
+			memxor(savevec, pkeystruct->block.init_vector, b);
+			/* use ENCRYPT, not DECRYPT here */
+			Encrypt_BLOWFISH(savevec, savevec, pkeystruct);
+			memxor(data + i, savevec, b);
+			counter_inc_be(pkeystruct->block.counter, b);
+		}
+		break;
 	default:
 		for (size_t i = 0; i < in_len; i += b) {
-			blowfish_decrypt(data + i, data + i, &(pkeystruct->schedule));
+			Decrypt_BLOWFISH(data + i, data + i, pkeystruct);
 		}
 	}
 
@@ -574,14 +668,14 @@ static int lua_des(lua_State *L, int encrypt)
 	switch (pkeystruct->block.mode) {
 	default:
 
-		if (pkeystruct->isThree) {
+		if (encrypt) {
 			for (size_t i = 0; i < in_len; i += b) {
-				three_des_crypt(data + i, data + i, pkeystruct->schedule);
+				Encrypt_DES(data + i, data + i, pkeystruct);
 			}
 		}
 		else {
 			for (size_t i = 0; i < in_len; i += b) {
-				des_crypt(data + i, data + i, pkeystruct->schedule);
+				Decrypt_DES(data + i, data + i, pkeystruct);
 			}
 		}
 	}
@@ -627,6 +721,7 @@ static int lua_set_cipher_mode(lua_State *L)
 
 	if (0 == strcmp(mode, "ECB")) {
 		memset(pblock->init_vector, 0, sizeof(pblock->init_vector));
+		memset(pblock->counter, 0, sizeof(pblock->counter));
 		pblock->mode = mode_ECB;
 		lua_pushboolean(L, 1);
 		return 1;
@@ -654,6 +749,7 @@ static int lua_set_cipher_mode(lua_State *L)
 	}
 
 	memset(pblock->init_vector, 0, sizeof(pblock->init_vector));
+	memset(pblock->counter, 0, sizeof(pblock->counter));
 	memcpy(pblock->init_vector, vec, vec_len);
 	pblock->mode = found_mode;
 	lua_pushboolean(L, 1);

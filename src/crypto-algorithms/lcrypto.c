@@ -323,6 +323,19 @@ static int lua_blowfish_encrypt(lua_State *L)
 			memcpy(pkeystruct->block.init_vector, savevec, b);
 		}
 		break;
+	case mode_CFB:
+		for (size_t i = 0; i < in_len; i += b) {
+			blowfish_encrypt(pkeystruct->block.init_vector, pkeystruct->block.init_vector, &(pkeystruct->schedule));
+			memxor(data + i, pkeystruct->block.init_vector, b);
+			memcpy(pkeystruct->block.init_vector, data + i, b);
+		}
+		break;
+	case mode_OFB:
+		for (size_t i = 0; i < in_len; i += b) {
+			blowfish_encrypt(pkeystruct->block.init_vector, pkeystruct->block.init_vector, &(pkeystruct->schedule));
+			memxor(data + i, pkeystruct->block.init_vector, b);
+		}
+		break;
 	default:
 		for (size_t i = 0; i < in_len; i += b) {
 			blowfish_encrypt(data + i, data + i, &(pkeystruct->schedule));
@@ -386,7 +399,21 @@ static int lua_blowfish_decrypt(lua_State *L)
 			memcpy(pkeystruct->block.init_vector, savevec, b);
 		}
 		break;
-
+	case mode_CFB:
+		for (size_t i = 0; i < in_len; i += b) {
+			/* use ENCRYPT, not DECRYPT here */
+			blowfish_encrypt(pkeystruct->block.init_vector, savevec, &(pkeystruct->schedule));
+			memcpy(pkeystruct->block.init_vector, data + i, b);
+			memxor(data + i, savevec, b);
+		}
+		break;
+	case mode_OFB:
+		for (size_t i = 0; i < in_len; i += b) {
+			/* use ENCRYPT, not DECRYPT here */
+			blowfish_encrypt(pkeystruct->block.init_vector, pkeystruct->block.init_vector, &(pkeystruct->schedule));
+			memxor(data + i, pkeystruct->block.init_vector, b);
+		}
+		break;
 
 	default:
 		for (size_t i = 0; i < in_len; i += b) {
@@ -665,13 +692,13 @@ static int lua_get_cipher_info(lua_State *L)
 		lua_pushstring(L, "AES");
 		lua_rawset(L, -3);
 	}
-	else if (p != (void*)lua_blowfish_prepare_key) {
+	else if (p == (void*)lua_blowfish_prepare_key) {
 		lua_newtable(L);
 		lua_pushstring(L, "cipher");
 		lua_pushstring(L, "BLOWFISH");
 		lua_rawset(L, -3);
 	}
-	else if (p != (void*)lua_des_prepare_key) {
+	else if (p == (void*)lua_des_prepare_key) {
 		L_DES_KEY *pkeystruct = (L_DES_KEY *)lua_touserdata(L, 1);
 		lua_newtable(L);
 		lua_pushstring(L, "cipher");

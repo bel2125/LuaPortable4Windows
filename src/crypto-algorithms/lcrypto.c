@@ -20,12 +20,15 @@
 #include "sha256.h"
 #include "rot-13.h"
 
+static const char * mode_names[] = { "EBC", "CBC", "PCBC", "CFB", "OFB", "CTR" };
+enum cyphermode { mode_ECB = 0, mode_CBC, mode_PCBC, mode_CFB, mode_OFB, mode_CTR, mode_enum_count };
+
 typedef struct tBlockCipherBase {
 	uint16_t bit_size;
 	uint8_t byte_size;
 	uint8_t can_encode;
 	uint8_t can_decode;
-	enum {mode_EDH = 0, mode_CBC, mode_PCBC, mode_CFB, mode_OFB, mode_CTR} mode;
+	enum cyphermode mode;
 	uint8_t init_vector[256];
 } BLOCKCYPHERBASE;
 
@@ -106,7 +109,15 @@ static int lua_base64_decode(lua_State *L)
 }
 
 
-static int lua_aes_preparekey(lua_State *L)
+static void memxor(uint8_t *inout, const uint8_t * xor, size_t len)
+{
+	for (size_t i = 0; i < len; i++) {
+		inout[i] = inout[i] ^ xor[i];
+	}
+}
+
+
+static int lua_aes_prepare_key(lua_State *L)
 {
 	if (lua_type(L, 1) != LUA_TSTRING) {
 		return luaL_error(L, "%s parameter error", __func__);
@@ -133,7 +144,7 @@ static int lua_aes_preparekey(lua_State *L)
 	if (pkeystruct == NULL) {
 		return luaL_error(L, "%s out of memory", __func__);
 	}
-	lua_pushlightuserdata(L, &lua_aes_preparekey);
+	lua_pushlightuserdata(L, &lua_aes_prepare_key);
 	lua_setuservalue(L, -2);
 
 	memset(pkeystruct, 0, sizeof(L_AES_KEY));
@@ -163,14 +174,14 @@ static int lua_aes_encrypt(lua_State *L)
 		return luaL_error(L, "%s parameter error", __func__);
 	}
 	void *p = lua_touserdata(L, -1);
-	if (p != (void*)lua_aes_preparekey) {
+	if (p != (void*)lua_aes_prepare_key) {
 		return luaL_error(L, "%s parameter error", __func__);
 	}
 	lua_pop(L, 1);
 
 	size_t in_len = 0;
 	const char *in = lua_tolstring(L, 1, &in_len);
-	L_AES_KEY *pkeystruct = (L_AES_KEY *)lua_touserdata(L, -1);
+	L_AES_KEY *pkeystruct = (L_AES_KEY *)lua_touserdata(L, 2);
 
 	int b = pkeystruct->block.byte_size;
 	in_len = ((in_len + (b - 1)) / b) * b;
@@ -206,14 +217,14 @@ static int lua_aes_decrypt(lua_State *L)
 		return luaL_error(L, "%s parameter error", __func__);
 	}
 	void *p = lua_touserdata(L, -1);
-	if (p != (void*)lua_aes_preparekey) {
+	if (p != (void*)lua_aes_prepare_key) {
 		return luaL_error(L, "%s parameter error", __func__);
 	}
 	lua_pop(L, 1);
 
 	size_t in_len = 0;
 	const char *in = lua_tolstring(L, 1, &in_len);
-	L_AES_KEY *pkeystruct = (L_AES_KEY *)lua_touserdata(L, -1);
+	L_AES_KEY *pkeystruct = (L_AES_KEY *)lua_touserdata(L, 2);
 
 	int b = pkeystruct->block.byte_size;
 	in_len = ((in_len + (b - 1)) / b) * b;
@@ -236,7 +247,7 @@ static int lua_aes_decrypt(lua_State *L)
 }
 
 
-static int lua_blowfish_preparekey(lua_State *L)
+static int lua_blowfish_prepare_key(lua_State *L)
 {
 	if (lua_type(L, 1) != LUA_TSTRING) {
 		return luaL_error(L, "%s parameter error", __func__);
@@ -249,7 +260,7 @@ static int lua_blowfish_preparekey(lua_State *L)
 	if (pkeystruct == NULL) {
 		return luaL_error(L, "%s out of memory", __func__);
 	}
-	lua_pushlightuserdata(L, &lua_blowfish_preparekey);
+	lua_pushlightuserdata(L, &lua_blowfish_prepare_key);
 	lua_setuservalue(L, -2);
 
 	memset(pkeystruct, 0, sizeof(L_BLOWFISH_KEY));
@@ -276,14 +287,14 @@ static int lua_blowfish_encrypt(lua_State *L)
 		return luaL_error(L, "%s parameter error", __func__);
 	}
 	void *p = lua_touserdata(L, -1);
-	if (p != (void*)lua_blowfish_preparekey) {
+	if (p != (void*)lua_blowfish_prepare_key) {
 		return luaL_error(L, "%s parameter error", __func__);
 	}
 	lua_pop(L, 1);
 
 	size_t in_len = 0;
 	const char *in = lua_tolstring(L, 1, &in_len);
-	L_BLOWFISH_KEY *pkeystruct = (L_BLOWFISH_KEY *)lua_touserdata(L, -1);
+	L_BLOWFISH_KEY *pkeystruct = (L_BLOWFISH_KEY *)lua_touserdata(L, 2);
 
 	int b = pkeystruct->block.byte_size;
 	in_len = ((in_len + (b - 1)) / b) * b;
@@ -293,7 +304,25 @@ static int lua_blowfish_encrypt(lua_State *L)
 	}
 	memcpy(data, in, in_len);
 
+	uint8_t savevec[256];
+
 	switch (pkeystruct->block.mode) {
+	case mode_CBC:
+		for (size_t i = 0; i < in_len; i += b) {
+			memxor(data + i, pkeystruct->block.init_vector, b);
+			blowfish_encrypt(data + i, data + i, &(pkeystruct->schedule));
+			memcpy(pkeystruct->block.init_vector, data + i, b);
+		}
+		break;
+	case mode_PCBC:
+		for (size_t i = 0; i < in_len; i += b) {
+			memcpy(savevec, data + i, b);
+			memxor(pkeystruct->block.init_vector, data + i, b);
+			blowfish_encrypt(pkeystruct->block.init_vector, data + i, &(pkeystruct->schedule));
+			memxor(savevec, data + i, b);
+			memcpy(pkeystruct->block.init_vector, savevec, b);
+		}
+		break;
 	default:
 		for (size_t i = 0; i < in_len; i += b) {
 			blowfish_encrypt(data + i, data + i, &(pkeystruct->schedule));
@@ -319,14 +348,14 @@ static int lua_blowfish_decrypt(lua_State *L)
 		return luaL_error(L, "%s parameter error", __func__);
 	}
 	void *p = lua_touserdata(L, -1);
-	if (p != (void*)lua_blowfish_preparekey) {
+	if (p != (void*)lua_blowfish_prepare_key) {
 		return luaL_error(L, "%s parameter error", __func__);
 	}
 	lua_pop(L, 1);
 
 	size_t in_len = 0;
 	const char *in = lua_tolstring(L, 1, &in_len);
-	L_BLOWFISH_KEY *pkeystruct = (L_BLOWFISH_KEY *)lua_touserdata(L, -1);
+	L_BLOWFISH_KEY *pkeystruct = (L_BLOWFISH_KEY *)lua_touserdata(L, 2);
 
 	int b = pkeystruct->block.byte_size;
 	in_len = ((in_len + (b - 1)) / b) * b;
@@ -336,7 +365,29 @@ static int lua_blowfish_decrypt(lua_State *L)
 	}
 	memcpy(data, in, in_len);
 
+	uint8_t savevec[256];
+
 	switch (pkeystruct->block.mode) {
+	case mode_CBC:
+		for (size_t i = 0; i < in_len; i += b) {
+			memcpy(savevec, pkeystruct->block.init_vector, b);
+			memcpy(pkeystruct->block.init_vector, data + i, b);
+			blowfish_decrypt(data + i, data + i, &(pkeystruct->schedule));
+			memxor(data + i, savevec, b);
+		}
+		break;
+
+	case mode_PCBC:
+		for (size_t i = 0; i < in_len; i += b) {
+			memcpy(savevec, data + i, b);
+			blowfish_decrypt(data + i, data + i, &(pkeystruct->schedule));
+			memxor(data + i, pkeystruct->block.init_vector, b);
+			memxor(savevec, data + i, b);
+			memcpy(pkeystruct->block.init_vector, savevec, b);
+		}
+		break;
+
+
 	default:
 		for (size_t i = 0; i < in_len; i += b) {
 			blowfish_decrypt(data + i, data + i, &(pkeystruct->schedule));
@@ -349,7 +400,7 @@ static int lua_blowfish_decrypt(lua_State *L)
 }
 
 
-static int lua_rc4_preparekey(lua_State *L)
+static int lua_rc4_prepare_key(lua_State *L)
 {
 	if (lua_type(L, 1) != LUA_TSTRING) {
 		return luaL_error(L, "%s parameter error", __func__);
@@ -362,7 +413,7 @@ static int lua_rc4_preparekey(lua_State *L)
 	if (pkeystruct == NULL) {
 		return luaL_error(L, "%s out of memory", __func__);
 	}
-	lua_pushlightuserdata(L, &lua_rc4_preparekey);
+	lua_pushlightuserdata(L, &lua_rc4_prepare_key);
 	lua_setuservalue(L, -2);
 
 	memset(pkeystruct, 0, sizeof(L_RC4_KEY));
@@ -384,14 +435,14 @@ static int lua_rc4(lua_State *L)
 		return luaL_error(L, "%s parameter error", __func__);
 	}
 	void *p = lua_touserdata(L, -1);
-	if (p != (void*)lua_rc4_preparekey) {
+	if (p != (void*)lua_rc4_prepare_key) {
 		return luaL_error(L, "%s parameter error", __func__);
 	}
 	lua_pop(L, 1);
 
 	size_t in_len = 0;
 	const char *in = lua_tolstring(L, 1, &in_len);
-	L_RC4_KEY *pkeystruct = (L_RC4_KEY *)lua_touserdata(L, -1);
+	L_RC4_KEY *pkeystruct = (L_RC4_KEY *)lua_touserdata(L, 2);
 
 	char *data = malloc(in_len + 1);
 	if (data == NULL) {
@@ -399,16 +450,14 @@ static int lua_rc4(lua_State *L)
 	}
 
 	arcfour_generate_stream(pkeystruct->schedule, data, in_len);
-	for (size_t i = 0; i < in_len; i++) {
-		data[i] = data[i] ^ in[i];
-	}
+	memxor(data, in, in_len);
 	lua_pushlstring(L, data, in_len);
 	free(data);
 	return 1;
 }
 
 
-static int lua_des_preparekey(lua_State *L)
+static int lua_des_prepare_key(lua_State *L)
 {
 	if (lua_type(L, 1) != LUA_TSTRING) {
 		return luaL_error(L, "%s parameter error", __func__);
@@ -440,12 +489,12 @@ static int lua_des_preparekey(lua_State *L)
 	if (pkeystruct == NULL) {
 		return luaL_error(L, "%s out of memory", __func__);
 	}
-	lua_pushlightuserdata(L, &lua_des_preparekey);
+	lua_pushlightuserdata(L, &lua_des_prepare_key);
 	lua_setuservalue(L, -2);
 
 	memset(pkeystruct, 0, sizeof(L_DES_KEY));
-	pkeystruct->block.bit_size = 32;
-	pkeystruct->block.byte_size = 32 / 8;
+	pkeystruct->block.bit_size = 64;
+	pkeystruct->block.byte_size = 64 / 8;
 	pkeystruct->block.can_encode = !!encrypt;
 	pkeystruct->block.can_decode = !encrypt;
 	pkeystruct->isThree = !!use3DES;
@@ -478,14 +527,14 @@ static int lua_des(lua_State *L, int encrypt)
 		return luaL_error(L, "%s parameter error", __func__);
 	}
 	void *p = lua_touserdata(L, -1);
-	if (p != (void*)lua_des_preparekey) {
+	if (p != (void*)lua_des_prepare_key) {
 		return luaL_error(L, "%s parameter error", __func__);
 	}
 	lua_pop(L, 1);
 
 	size_t in_len = 0;
 	const char *in = lua_tolstring(L, 1, &in_len);
-	L_DES_KEY *pkeystruct = (L_DES_KEY *)lua_touserdata(L, -1);
+	L_DES_KEY *pkeystruct = (L_DES_KEY *)lua_touserdata(L, 2);
 
 	int b = pkeystruct->block.byte_size;
 	in_len = ((in_len + (b - 1)) / b) * b;
@@ -525,6 +574,145 @@ static int lua_des_encrypt(lua_State *L)
 static int lua_des_decrypt(lua_State *L)
 {
 	return lua_des(L, 0);
+}
+
+
+static int lua_set_cipher_mode(lua_State *L)
+{
+	if (lua_type(L, 1) != LUA_TUSERDATA) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+	if (lua_type(L, 2) != LUA_TSTRING) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+	lua_getuservalue(L, 1);
+	if (lua_type(L, -1) != LUA_TLIGHTUSERDATA) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+	void *p = lua_touserdata(L, -1);
+	if ((p != (void*)lua_aes_prepare_key) && (p != (void*)lua_blowfish_prepare_key) && (p != (void*)lua_des_prepare_key)) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+	lua_pop(L, 1);
+
+	BLOCKCYPHERBASE *pblock = (BLOCKCYPHERBASE *)lua_touserdata(L, 1);
+	const char *mode = lua_tostring(L, 2);
+
+	if (0 == strcmp(mode, "ECB")) {
+		memset(pblock->init_vector, 0, sizeof(pblock->init_vector));
+		pblock->mode = mode_ECB;
+		lua_pushboolean(L, 1);
+		return 1;
+	}
+
+	if (lua_type(L, 3) != LUA_TSTRING) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+
+	static vec_len = 0;
+	const char *vec = lua_tolstring(L, 3, &vec_len);
+	if (vec_len != pblock->byte_size) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+
+	int found_mode = -1;
+	for (int i = 0; i < mode_enum_count; i++) {
+		if (0 == strcmp(mode, mode_names[i])) {
+			found_mode = i;
+			break;
+		}
+	}
+	if (found_mode < 0) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+
+	memset(pblock->init_vector, 0, sizeof(pblock->init_vector));
+	memcpy(pblock->init_vector, vec, vec_len);
+	pblock->mode = found_mode;
+	lua_pushboolean(L, 1);
+	return 1;
+}
+
+
+static int lua_get_cipher_info(lua_State *L)
+{
+	if (lua_type(L, 1) != LUA_TUSERDATA) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+	lua_getuservalue(L, 1);
+	if (lua_type(L, -1) != LUA_TLIGHTUSERDATA) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+	void *p = lua_touserdata(L, -1);
+	lua_pop(L, 1);
+
+	// all stream ciphers
+	if (p == (void*)lua_rc4_prepare_key) {
+		lua_newtable(L);
+		lua_pushstring(L, "cipher");
+		lua_pushstring(L, "aes");
+		lua_rawset(L, -3);
+		lua_pushstring(L, "stream");
+		lua_pushboolean(L, 1);
+		lua_rawset(L, -3);
+		return 1;
+	}
+
+	// all block ciphers
+	if (p == (void*)lua_aes_prepare_key) {
+		lua_newtable(L);
+		lua_pushstring(L, "cipher");
+		lua_pushstring(L, "AES");
+		lua_rawset(L, -3);
+	}
+	else if (p != (void*)lua_blowfish_prepare_key) {
+		lua_newtable(L);
+		lua_pushstring(L, "cipher");
+		lua_pushstring(L, "BLOWFISH");
+		lua_rawset(L, -3);
+	}
+	else if (p != (void*)lua_des_prepare_key) {
+		L_DES_KEY *pkeystruct = (L_DES_KEY *)lua_touserdata(L, 1);
+		lua_newtable(L);
+		lua_pushstring(L, "cipher");
+		if (pkeystruct->isThree) {
+			lua_pushstring(L, "3DES");
+		}
+		else {
+			lua_pushstring(L, "DES");
+		}
+		lua_rawset(L, -3);
+	}
+	else {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+
+	lua_pushstring(L, "block");
+	lua_pushboolean(L, 1);
+	lua_rawset(L, -3);
+
+	BLOCKCYPHERBASE *pblock = (BLOCKCYPHERBASE *)lua_touserdata(L, 1); /* do not use pblock before p is checked */
+
+	lua_pushstring(L, "encode");
+	lua_pushboolean(L, pblock->can_encode);
+	lua_rawset(L, -3);
+	lua_pushstring(L, "decode");
+	lua_pushboolean(L, pblock->can_decode);
+	lua_rawset(L, -3);
+	lua_pushstring(L, "bit_size");
+	lua_pushinteger(L, pblock->bit_size);
+	lua_rawset(L, -3);
+	lua_pushstring(L, "byte_size");
+	lua_pushinteger(L, pblock->byte_size);
+	lua_rawset(L, -3);
+	if ((pblock->mode < 0) || (pblock->mode >= mode_enum_count)) {
+		pblock->mode = 0;
+	}
+	lua_pushstring(L, "mode");
+	lua_pushstring(L, mode_names[pblock->mode]);
+	lua_rawset(L, -3);
+
+	return 1;
 }
 
 
@@ -792,19 +980,20 @@ static const struct luaL_Reg funclist[] = {
 	{ "hex_decode", lua_hex_decode },
 
 	/* block ciphers */
-	{ "aes_preparekey", lua_aes_preparekey },
+	{ "aes_prepare_key", lua_aes_prepare_key },
 	{ "aes_encrypt", lua_aes_encrypt },
 	{ "aes_decrypt", lua_aes_decrypt },
-	{ "blowfish_preparekey", lua_blowfish_preparekey },
+	{ "blowfish_prepare_key", lua_blowfish_prepare_key },
 	{ "blowfish_encrypt", lua_blowfish_encrypt },
 	{ "blowfish_decrypt", lua_blowfish_decrypt },
-	{ "des_preparekey", lua_des_preparekey },
+	{ "des_prepare_key", lua_des_prepare_key },
 	{ "des_encrypt", lua_des_encrypt },
 	{ "des_decrypt", lua_des_decrypt },
-
+	{ "set_cipher_mode", lua_set_cipher_mode },
+	{ "get_cipher_info", lua_get_cipher_info },
 
 	/* stream ciphers */
-	{ "rc4_preparekey", lua_rc4_preparekey },
+	{ "rc4_prepare_key", lua_rc4_prepare_key },
 	{ "rc4", lua_rc4 },
 
 	/* checksums and hash functions */

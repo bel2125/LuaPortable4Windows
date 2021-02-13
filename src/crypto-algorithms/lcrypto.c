@@ -193,6 +193,115 @@ static void counter_inc_be(uint8_t *inout, size_t len)
 }
 
 
+void Block_Encrypt(BLOCKCYPHERBASE *block, void *prm, uint8_t *data, size_t len)
+{
+	uint8_t savevec[256];
+	size_t b = block->byte_size;
+
+	switch (block->mode) {
+	case mode_CBC:
+		for (size_t i = 0; i < len; i += b) {
+			memxor(data + i, block->init_vector, b);
+			block->func.Encrypt(data + i, data + i, prm);
+			memcpy(block->init_vector, data + i, b);
+		}
+		break;
+	case mode_PCBC:
+		for (size_t i = 0; i < len; i += b) {
+			memcpy(savevec, data + i, b);
+			memxor(block->init_vector, data + i, b);
+			block->func.Encrypt(data + i, block->init_vector, prm);
+			memxor(savevec, data + i, b);
+			memcpy(block->init_vector, savevec, b);
+		}
+		break;
+	case mode_CFB:
+		for (size_t i = 0; i < len; i += b) {
+			block->func.Encrypt(block->init_vector, block->init_vector, prm);
+			memxor(data + i, block->init_vector, b);
+			memcpy(block->init_vector, data + i, b);
+		}
+		break;
+	case mode_OFB:
+		for (size_t i = 0; i < len; i += b) {
+			block->func.Encrypt(block->init_vector, block->init_vector, prm);
+			memxor(data + i, block->init_vector, b);
+		}
+		break;
+	case mode_CTR:
+		for (size_t i = 0; i < len; i += b) {
+			memcpy(savevec, block->counter, b);
+			memxor(savevec, block->init_vector, b);
+			block->func.Encrypt(savevec, savevec, prm);
+			memxor(data + i, savevec, b);
+			counter_inc_be(block->counter, b);
+		}
+		break;
+	default:
+		for (size_t i = 0; i < len; i += b) {
+			block->func.Encrypt(data + i, data + i, prm);
+		}
+	}
+}
+
+
+void Block_Decrypt(BLOCKCYPHERBASE *block, void *prm, uint8_t *data, size_t len)
+{
+	uint8_t savevec[256];
+	size_t b = block->byte_size;
+
+	switch (block->mode) {
+	case mode_CBC:
+		for (size_t i = 0; i < len; i += b) {
+			memcpy(savevec, block->init_vector, b);
+			memcpy(block->init_vector, data + i, b);
+			block->func.Decrypt(data + i, data + i, prm);
+			memxor(data + i, savevec, b);
+		}
+		break;
+
+	case mode_PCBC:
+		for (size_t i = 0; i < len; i += b) {
+			memcpy(savevec, data + i, b);
+			block->func.Decrypt(data + i, data + i, prm);
+			memxor(data + i, block->init_vector, b);
+			memxor(savevec, data + i, b);
+			memcpy(block->init_vector, savevec, b);
+		}
+		break;
+	case mode_CFB:
+		for (size_t i = 0; i < len; i += b) {
+			/* use ENCRYPT, not DECRYPT here */
+			block->func.Encrypt(savevec, block->init_vector, prm);
+			memcpy(block->init_vector, data + i, b);
+			memxor(data + i, savevec, b);
+		}
+		break;
+	case mode_OFB:
+		for (size_t i = 0; i < len; i += b) {
+			/* use ENCRYPT, not DECRYPT here */
+			block->func.Encrypt(block->init_vector, block->init_vector, prm);
+			memxor(data + i, block->init_vector, b);
+		}
+		break;
+	case mode_CTR:
+		for (size_t i = 0; i < len; i += b) {
+			memcpy(savevec, block->counter, b);
+			memxor(savevec, block->init_vector, b);
+			/* use ENCRYPT, not DECRYPT here */
+			block->func.Encrypt(savevec, savevec, prm);
+			memxor(data + i, savevec, b);
+			counter_inc_be(block->counter, b);
+		}
+		break;
+	default:
+		for (size_t i = 0; i < len; i += b) {
+			block->func.Decrypt(data + i, data + i, prm);
+		}
+	}
+}
+
+
 static int lua_aes_prepare_key(lua_State *L)
 {
 	if (lua_type(L, 1) != LUA_TSTRING) {
@@ -224,6 +333,8 @@ static int lua_aes_prepare_key(lua_State *L)
 	lua_setuservalue(L, -2);
 
 	memset(pkeystruct, 0, sizeof(L_AES_KEY));
+	pkeystruct->block.func.Encrypt = Encrypt_AES;
+	pkeystruct->block.func.Decrypt = Decrypt_AES;
 	pkeystruct->block.bit_size = key_len_bits;
 	pkeystruct->block.byte_size = key_len_bits/8;
 	pkeystruct->block.can_encode = 1;
@@ -267,13 +378,7 @@ static int lua_aes_encrypt(lua_State *L)
 	}
 	memcpy(data, in, in_len);
 
-	switch (pkeystruct->block.mode) {
-	default:
-		for (size_t i = 0; i < in_len; i += b) {
-			Encrypt_AES(data + i, data + i, pkeystruct);
-		}
-	}
-
+	Block_Encrypt(&pkeystruct->block, pkeystruct, data, in_len);
 	lua_pushlstring(L, data, in_len);
 	free(data);
 	return 1;
@@ -310,13 +415,7 @@ static int lua_aes_decrypt(lua_State *L)
 	}
 	memcpy(data, in, in_len);
 
-	switch (pkeystruct->block.mode) {
-	default:
-		for (size_t i = 0; i < in_len; i += b) {
-			Decrypt_AES(data + i, data + i, pkeystruct);
-		}
-	}
-
+	Block_Decrypt(&pkeystruct->block, pkeystruct, data, in_len);
 	lua_pushlstring(L, data, in_len);
 	free(data);
 	return 1;
@@ -340,6 +439,8 @@ static int lua_blowfish_prepare_key(lua_State *L)
 	lua_setuservalue(L, -2);
 
 	memset(pkeystruct, 0, sizeof(L_BLOWFISH_KEY));
+	pkeystruct->block.func.Encrypt = Encrypt_BLOWFISH;
+	pkeystruct->block.func.Decrypt = Decrypt_BLOWFISH;
 	pkeystruct->block.bit_size = 64;
 	pkeystruct->block.byte_size = 64 / 8;
 	pkeystruct->block.can_encode = 1;
@@ -380,53 +481,7 @@ static int lua_blowfish_encrypt(lua_State *L)
 	}
 	memcpy(data, in, in_len);
 
-	uint8_t savevec[256];
-
-	switch (pkeystruct->block.mode) {
-	case mode_CBC:
-		for (size_t i = 0; i < in_len; i += b) {
-			memxor(data + i, pkeystruct->block.init_vector, b);
-			Encrypt_BLOWFISH(data + i, data + i, pkeystruct);
-			memcpy(pkeystruct->block.init_vector, data + i, b);
-		}
-		break;
-	case mode_PCBC:
-		for (size_t i = 0; i < in_len; i += b) {
-			memcpy(savevec, data + i, b);
-			memxor(pkeystruct->block.init_vector, data + i, b);
-			Encrypt_BLOWFISH(data + i, pkeystruct->block.init_vector, pkeystruct);
-			memxor(savevec, data + i, b);
-			memcpy(pkeystruct->block.init_vector, savevec, b);
-		}
-		break;
-	case mode_CFB:
-		for (size_t i = 0; i < in_len; i += b) {
-			Encrypt_BLOWFISH(pkeystruct->block.init_vector, pkeystruct->block.init_vector, pkeystruct);
-			memxor(data + i, pkeystruct->block.init_vector, b);
-			memcpy(pkeystruct->block.init_vector, data + i, b);
-		}
-		break;
-	case mode_OFB:
-		for (size_t i = 0; i < in_len; i += b) {
-			Encrypt_BLOWFISH(pkeystruct->block.init_vector, pkeystruct->block.init_vector, pkeystruct);
-			memxor(data + i, pkeystruct->block.init_vector, b);
-		}
-		break;
-	case mode_CTR:
-		for (size_t i = 0; i < in_len; i += b) {
-			memcpy(savevec, pkeystruct->block.counter, b);
-			memxor(savevec, pkeystruct->block.init_vector, b);
-			Encrypt_BLOWFISH(savevec, savevec, pkeystruct);
-			memxor(data + i, savevec, b);
-			counter_inc_be(pkeystruct->block.counter, b);
-		}
-		break;
-	default:
-		for (size_t i = 0; i < in_len; i += b) {
-			Encrypt_BLOWFISH(data + i, data + i, pkeystruct);
-		}
-	}
-
+	Block_Encrypt(&pkeystruct->block, pkeystruct, data, in_len);
 	lua_pushlstring(L, data, in_len);
 	free(data);
 	return 1;
@@ -463,58 +518,7 @@ static int lua_blowfish_decrypt(lua_State *L)
 	}
 	memcpy(data, in, in_len);
 
-	uint8_t savevec[256];
-
-	switch (pkeystruct->block.mode) {
-	case mode_CBC:
-		for (size_t i = 0; i < in_len; i += b) {
-			memcpy(savevec, pkeystruct->block.init_vector, b);
-			memcpy(pkeystruct->block.init_vector, data + i, b);
-			Decrypt_BLOWFISH(data + i, data + i, pkeystruct);
-			memxor(data + i, savevec, b);
-		}
-		break;
-
-	case mode_PCBC:
-		for (size_t i = 0; i < in_len; i += b) {
-			memcpy(savevec, data + i, b);
-			Decrypt_BLOWFISH(data + i, data + i, pkeystruct);
-			memxor(data + i, pkeystruct->block.init_vector, b);
-			memxor(savevec, data + i, b);
-			memcpy(pkeystruct->block.init_vector, savevec, b);
-		}
-		break;
-	case mode_CFB:
-		for (size_t i = 0; i < in_len; i += b) {
-			/* use ENCRYPT, not DECRYPT here */
-			Encrypt_BLOWFISH(savevec, pkeystruct->block.init_vector, pkeystruct);
-			memcpy(pkeystruct->block.init_vector, data + i, b);
-			memxor(data + i, savevec, b);
-		}
-		break;
-	case mode_OFB:
-		for (size_t i = 0; i < in_len; i += b) {
-			/* use ENCRYPT, not DECRYPT here */
-			Encrypt_BLOWFISH(pkeystruct->block.init_vector, pkeystruct->block.init_vector, pkeystruct);
-			memxor(data + i, pkeystruct->block.init_vector, b);
-		}
-		break;
-	case mode_CTR:
-		for (size_t i = 0; i < in_len; i += b) {
-			memcpy(savevec, pkeystruct->block.counter, b);
-			memxor(savevec, pkeystruct->block.init_vector, b);
-			/* use ENCRYPT, not DECRYPT here */
-			Encrypt_BLOWFISH(savevec, savevec, pkeystruct);
-			memxor(data + i, savevec, b);
-			counter_inc_be(pkeystruct->block.counter, b);
-		}
-		break;
-	default:
-		for (size_t i = 0; i < in_len; i += b) {
-			Decrypt_BLOWFISH(data + i, data + i, pkeystruct);
-		}
-	}
-
+	Block_Decrypt(&pkeystruct->block, pkeystruct, data, in_len);
 	lua_pushlstring(L, data, in_len);
 	free(data);
 	return 1;
@@ -614,6 +618,8 @@ static int lua_des_prepare_key(lua_State *L)
 	lua_setuservalue(L, -2);
 
 	memset(pkeystruct, 0, sizeof(L_DES_KEY));
+	pkeystruct->block.func.Encrypt = Encrypt_DES;
+	pkeystruct->block.func.Decrypt = Decrypt_DES;
 	pkeystruct->block.bit_size = 64;
 	pkeystruct->block.byte_size = 64 / 8;
 	pkeystruct->block.can_encode = !!encrypt;
@@ -665,21 +671,8 @@ static int lua_des(lua_State *L, int encrypt)
 	}
 	memcpy(data, in, in_len);
 
-	switch (pkeystruct->block.mode) {
-	default:
-
-		if (encrypt) {
-			for (size_t i = 0; i < in_len; i += b) {
-				Encrypt_DES(data + i, data + i, pkeystruct);
-			}
-		}
-		else {
-			for (size_t i = 0; i < in_len; i += b) {
-				Decrypt_DES(data + i, data + i, pkeystruct);
-			}
-		}
-	}
-
+	if (encrypt) Block_Encrypt(&pkeystruct->block, pkeystruct, data, in_len);
+	else Block_Decrypt(&pkeystruct->block, pkeystruct, data, in_len);
 	lua_pushlstring(L, data, in_len);
 	free(data);
 	return 1;

@@ -3,6 +3,7 @@
 #include <string.h>
 #include <Windows.h>
 #include "lua_all.h"
+#define stricmp _stricmp
 
 
 static int lua_MessageBox(lua_State *L)
@@ -159,24 +160,22 @@ DialogProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 }
 
 
-#define ID_HELP   150
-#define ID_TEXT   200
-
 LPWORD lpwAlign(LPWORD lpIn)
 {
-	ULONG ul;
-
-	ul = (ULONG)lpIn;
-	ul++;
-	ul >>= 1;
-	ul <<= 1;
-	return (LPWORD)ul;
+	ULONG align = 4;
+	return (LPWORD)(((((ULONG)lpIn) + 1) / align) * align);
 }
 
 
-/* https://docs.microsoft.com/en-us/windows/win32/dlgbox/using-dialog-boxes */
-LRESULT DisplayMyMessage(LPSTR lpszMessage, LPARAM param)
+static int lua_InputBox(lua_State *L)
 {
+	struct dlg_proc_param dlg_prm;
+	memset(&dlg_prm, 0, sizeof(dlg_prm));
+
+	if (lua_type(L, 1) != LUA_TTABLE) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+
 	HINSTANCE hinst = NULL;
 	HWND hwndOwner = NULL;
 
@@ -188,27 +187,169 @@ LRESULT DisplayMyMessage(LPSTR lpszMessage, LPARAM param)
 	LRESULT ret;
 	int nchar;
 
-	hgbl = GlobalAlloc(GMEM_ZEROINIT, 1024);
-	if (!hgbl)
+	hgbl = GlobalAlloc(GMEM_ZEROINIT, 1024*16);
+	if (!hgbl) {
 		return -1;
-
+	}
 	lpdt = (LPDLGTEMPLATE)GlobalLock(hgbl);
 
-	// Define a dialog box.
-
+	//-----------------------
+	// Define a dialog box, including title.
+	//-----------------------
 	lpdt->style = WS_POPUP | WS_BORDER | WS_SYSMENU | DS_MODALFRAME | WS_CAPTION;
-	lpdt->cdit = 3;         // Number of controls
+
+	/* get title */
+	const char *title = "";
+	int ltype = lua_getfield(L, 1, "title");
+	if (ltype == LUA_TSTRING) {
+		title = lua_tostring(L, -1);
+	}
+	lua_pop(L, 1);
+
+	/* get coordinates */
 	lpdt->x = 10;  lpdt->y = 10;
-	lpdt->cx = 100; lpdt->cy = 100;
+	lpdt->cx = 100; lpdt->cy = -1;
+	ltype = lua_getfield(L, 1, "x");
+	if (ltype == LUA_TNUMBER) {
+		lpdt->x = lua_tointeger(L, -1);
+	}
+	ltype = lua_getfield(L, 1, "y");
+	if (ltype == LUA_TNUMBER) {
+		lpdt->y = lua_tointeger(L, -1);
+	}
+	ltype = lua_getfield(L, 1, "cx");
+	if (ltype == LUA_TNUMBER) {
+		lpdt->cx = lua_tointeger(L, -1);
+	}
+	ltype = lua_getfield(L, 1, "cy");
+	if (ltype == LUA_TNUMBER) {
+		lpdt->cy = lua_tointeger(L, -1);
+	}
+	lua_pop(L, 4);
 
 	lpw = (LPWORD)(lpdt + 1);
 	*lpw++ = 0;             // No menu
 	*lpw++ = 0;             // Predefined dialog box class (by default)
 
 	lpwsz = (LPWSTR)lpw;
-	nchar = 1 + MultiByteToWideChar(CP_ACP, 0, "My Dialog", -1, lpwsz, 50);
+	nchar = 1 + MultiByteToWideChar(CP_UTF8, 0, title, -1, lpwsz, 50);
 	lpw += nchar;
+	lpdt->cdit = 0; // Number of items in dialog. Add them in a loop.
 
+	//-----------------------
+	// Dialog items
+	//-----------------------
+	ltype = lua_getfield(L, 1, "items");
+	if (ltype == LUA_TTABLE) {
+		lua_pushnil(L);
+		while (lua_next(L, -2) != 0) {
+			int key_type = lua_type(L, -2);
+			int value_type = lua_type(L, -1);
+
+			if (((key_type == LUA_TSTRING) || (key_type == LUA_TNUMBER)) && (value_type == LUA_TTABLE)) {
+				// Add one dialog item
+				printf("PNU %p\n", lpw);
+				lpw = lpwAlign(lpw);    // Align DLGITEMTEMPLATE on DWORD boundary
+				printf("PNA %p\n", lpw);
+				lpdit = (LPDLGITEMTEMPLATE)lpw;
+
+				lpdit->x = 10; 
+				lpdit->y = 10+20*lpdt->cdit;
+				lpdit->cx = 80;
+				lpdit->cy = 15;
+				const char *itemtype = "";
+				const char *itemtext = "";
+
+				ltype = lua_getfield(L, -1, "type");
+				if (ltype == LUA_TSTRING) {
+					itemtype = lua_tostring(L, -1);
+				}
+				lua_pop(L, 1);
+				ltype = lua_getfield(L, -1, "text");
+				if (ltype == LUA_TSTRING) {
+					itemtext = lua_tostring(L, -1);
+				}
+				lua_pop(L, 1);
+				ltype = lua_getfield(L, -1, "x");
+				if (ltype == LUA_TNUMBER) {
+					lpdit->x = lua_tointeger(L, -1);
+				}
+				lua_pop(L, 1);
+				ltype = lua_getfield(L, -1, "y");
+				if (ltype == LUA_TNUMBER) {
+					lpdit->y = lua_tointeger(L, -1);
+				}
+				lua_pop(L, 1);
+				ltype = lua_getfield(L, -1, "cx");
+				if (ltype == LUA_TNUMBER) {
+					lpdit->cx = lua_tointeger(L, -1);
+				}
+				lua_pop(L, 1);
+				ltype = lua_getfield(L, -1, "cy");
+				if (ltype == LUA_TNUMBER) {
+					lpdit->cy = lua_tointeger(L, -1);
+				}
+				lua_pop(L, 1);
+
+				/* type/class */
+				lpdt->cdit++;
+				lpdit->id = (lpdt->cdit);       // Item identifier
+				lpdit->style = WS_CHILD | WS_VISIBLE;
+				lpdit->dwExtendedStyle = 0;
+				if (lpdit->id == 1) lpdit->style |= BS_DEFPUSHBUTTON;
+
+				// see https://docs.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-dlgitemtemplate
+				WORD dlg_class = 0x0082;
+				if (!stricmp(itemtype, "button")) {
+					dlg_class = 0x0080;
+				}
+				if (!stricmp(itemtype, "check")) {
+					dlg_class = 0x0080;
+					lpdit->style |= BS_AUTOCHECKBOX;
+				}
+				if (!stricmp(itemtype, "radio")) {
+					dlg_class = 0x0080;
+					lpdit->style |= BS_AUTORADIOBUTTON;
+				}
+				if (!stricmp(itemtype, "edit")) {
+					dlg_class = 0x0081;
+					lpdit->style |= WS_BORDER | ES_AUTOHSCROLL;
+				}
+				if (!stricmp(itemtype, "number")) {
+					dlg_class = 0x0081;
+					lpdit->style |= WS_BORDER | ES_AUTOHSCROLL | ES_NUMBER;
+				}
+				if (!stricmp(itemtype, "static")) {
+					dlg_class = 0x0082;
+				}
+				if (!stricmp(itemtype, "list")) {
+					dlg_class = 0x0083;
+				}
+				if (!stricmp(itemtype, "scroll")) {
+					dlg_class = 0x0084;
+				}
+				if (!stricmp(itemtype, "combo")) {
+					dlg_class = 0x0085;
+				}
+
+				lpw = (LPWORD)(lpdit + 1);
+				*lpw++ = 0xFFFF;
+				*lpw++ = dlg_class;
+
+				lpwsz = (LPWSTR)lpw;
+				nchar = 1 + MultiByteToWideChar(CP_UTF8, 0, itemtext, -1, lpwsz, 100);
+				lpw += nchar;
+				*lpw++ = 0;             // No creation data
+			}	
+			lua_pop(L, 1);
+		}
+	}
+	//-----------------------  
+	if (lpdt->cy < 0) {
+		lpdt->cy = 20 + 20 * lpdt->cdit;
+	}
+
+#if 0
 	//-----------------------
 	// Define an OK button.
 	//-----------------------
@@ -228,9 +369,9 @@ LRESULT DisplayMyMessage(LPSTR lpszMessage, LPARAM param)
 	lpw += nchar;
 	*lpw++ = 0;             // No creation data
 
-							//-----------------------
-							// Define a Help button.
-							//-----------------------
+	//-----------------------
+	// Define a Help button.
+	//-----------------------
 	lpw = lpwAlign(lpw);    // Align DLGITEMTEMPLATE on DWORD boundary
 	lpdit = (LPDLGITEMTEMPLATE)lpw;
 	lpdit->x = 55; lpdit->y = 10;
@@ -240,16 +381,16 @@ LRESULT DisplayMyMessage(LPSTR lpszMessage, LPARAM param)
 
 	lpw = (LPWORD)(lpdit + 1);
 	*lpw++ = 0xFFFF;
-	*lpw++ = 0x0080;        // Button class atom
+	*lpw++ = 0x0080;        // Button class atom: https://docs.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-dlgitemtemplate
 
 	lpwsz = (LPWSTR)lpw;
 	nchar = 1 + MultiByteToWideChar(CP_ACP, 0, "Help", -1, lpwsz, 50);
 	lpw += nchar;
 	*lpw++ = 0;             // No creation data
 
-							//-----------------------
-							// Define a static text control.
-							//-----------------------
+	//-----------------------
+	// Define a static text control.
+	//-----------------------
 	lpw = lpwAlign(lpw);    // Align DLGITEMTEMPLATE on DWORD boundary
 	lpdit = (LPDLGITEMTEMPLATE)lpw;
 	lpdit->x = 10; lpdit->y = 10;
@@ -261,30 +402,23 @@ LRESULT DisplayMyMessage(LPSTR lpszMessage, LPARAM param)
 	*lpw++ = 0xFFFF;
 	*lpw++ = 0x0082;        // Static class
 
-	for (lpwsz = (LPWSTR)lpw; *lpwsz++ = (WCHAR)*lpszMessage++;);
+	const char*message = "bla";
+	for (lpwsz = (LPWSTR)lpw; *lpwsz++ = (WCHAR)*message++;);
 	lpw = (LPWORD)lpwsz;
 	*lpw++ = 0;             // No creation data
+#endif
 
 	GlobalUnlock(hgbl);
 	ret = DialogBoxIndirectParamA(hinst,
 		(LPDLGTEMPLATE)hgbl,
 		hwndOwner,
 		(DLGPROC)DialogProc,
-		param);
+		&dlg_prm);
 	GlobalFree(hgbl);
-	return ret;
-}
 
-
-static int lua_InputBox(lua_State *L)
-{
-	struct dlg_proc_param dlg_prm;
-
-	memset(&dlg_prm, 0, sizeof(dlg_prm));
-
-	LPARAM res = DisplayMyMessage("bla", (LPARAM)&dlg_prm);
 	return 0;
 }
+
 
 
 static const struct luaL_Reg funclist[] = {

@@ -128,29 +128,106 @@ static int lua_GetSaveFileName(lua_State *L)
 struct dlg_proc_param {
 	HWND hWnd;
 	lua_State *L;
+	int ret;
 }; 
+
 
 static INT_PTR CALLBACK
 DialogProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-	struct dlg_proc_param * pdlg_proc_param = 0;
-
 	switch (msg) {
 
 	case WM_CLOSE:
+	{
+		struct dlg_proc_param * pdlg_proc_param = (struct dlg_proc_param *)GetWindowLongPtr(hDlg, GWLP_USERDATA);
+		if ((pdlg_proc_param->hWnd == hDlg) && (pdlg_proc_param->L != NULL)) {
+			// condition should always be true
+			lua_pushinteger(pdlg_proc_param->L, 0);
+			pdlg_proc_param->ret = 1;
+		}
 		DestroyWindow(hDlg);
-		break;
+	}
+	break;
 
 	case WM_COMMAND:
-		//switch (LOWORD(wParam)) {
-		//}
+	{
+		WORD wmId = LOWORD(wParam);
+		WORD wmEvent = HIWORD(wParam);
+		HWND dlg = GetDlgItem(hDlg, wmId);
 
-		break;
+		if (wmEvent == 0) {
+			if (wmId >= 0x1000) {
+				int result = wmId - 0x1000;
+				struct dlg_proc_param * pdlg_proc_param = (struct dlg_proc_param *)GetWindowLongPtr(hDlg, GWLP_USERDATA);
+				if ((pdlg_proc_param->hWnd == hDlg) && (pdlg_proc_param->L != NULL)) {
+					// condition should always be true
+					lua_pushinteger(pdlg_proc_param->L, result);
+					pdlg_proc_param->ret = 1;
+
+					for (int i = 1; i < 0x1000; i++) {
+						HWND hItem = GetDlgItem(hDlg, i);
+						char className[32] = { 0 };
+						GetClassName(hItem, className, sizeof(className));
+
+						if (!stricmp(className, "Button")) {
+
+							UINT r = IsDlgButtonChecked(hDlg, i);
+							if (r == BST_CHECKED) {
+								lua_pushboolean(pdlg_proc_param->L, 1);
+							}
+							else if (r == BST_UNCHECKED) {
+								lua_pushboolean(pdlg_proc_param->L, 0);
+							}
+							else {
+								lua_pushnil(pdlg_proc_param->L);
+							}
+							pdlg_proc_param->ret++;
+
+						} else if (!stricmp(className, "Edit")) {
+
+							DWORD dwStyle = (DWORD)GetWindowLong(hItem, GWL_STYLE);
+							int len = GetWindowTextLengthW(hItem)+1;
+							LPWSTR utf16 = (LPWSTR)malloc(len * sizeof(WCHAR));
+							if (!utf16) continue;
+
+							GetWindowTextW(hItem, utf16, len);
+
+							char *utf8 = (char*)malloc(len * 3);
+							if (!utf8) {
+								free(utf16);
+								continue;
+							}
+
+							WideCharToMultiByte(CP_UTF8, 0, utf16, -1, utf8, len * 3, NULL, NULL);
+
+							if ((dwStyle & ES_NUMBER) == ES_NUMBER) {
+								long long nr = strtoll(utf8, NULL, 10);
+								lua_pushnumber(pdlg_proc_param->L, nr);
+							} else {
+								lua_pushstring(pdlg_proc_param->L, utf8);
+							}
+
+							free(utf8);
+							free(utf16);
+							pdlg_proc_param->ret++;
+						}
+					}
+					// all parameters stored to Lua state
+				}
+				EndDialog(hDlg, result);
+			}
+		}
+	}
+	break;
 
 	case WM_INITDIALOG:
-		pdlg_proc_param = (struct dlg_proc_param *)lParam;
+	{
+		struct dlg_proc_param * pdlg_proc_param = (struct dlg_proc_param *)lParam;
 		pdlg_proc_param->hWnd = hDlg;
-		break;
+		pdlg_proc_param->ret = 0;
+		SetWindowLongPtr(hDlg, GWLP_USERDATA, (LONG_PTR)pdlg_proc_param);
+	}
+	break;
 
 	default:
 		break;
@@ -167,10 +244,15 @@ LPWORD lpwAlign(LPWORD lpIn)
 }
 
 
+#define MAX(a,b) (((a)>(b))?(a):(b))
+
 static int lua_InputBox(lua_State *L)
 {
 	struct dlg_proc_param dlg_prm;
 	memset(&dlg_prm, 0, sizeof(dlg_prm));
+	dlg_prm.L = L;
+	SHORT button_count = 0;
+	SHORT input_count = 0;
 
 	if (lua_type(L, 1) != LUA_TTABLE) {
 		return luaL_error(L, "%s parameter error", __func__);
@@ -208,7 +290,7 @@ static int lua_InputBox(lua_State *L)
 
 	/* get coordinates */
 	lpdt->x = 10;  lpdt->y = 10;
-	lpdt->cx = 100; lpdt->cy = -1;
+	lpdt->cx = 20; lpdt->cy = 20;
 	ltype = lua_getfield(L, 1, "x");
 	if (ltype == LUA_TNUMBER) {
 		lpdt->x = lua_tointeger(L, -1);
@@ -248,9 +330,7 @@ static int lua_InputBox(lua_State *L)
 
 			if (((key_type == LUA_TSTRING) || (key_type == LUA_TNUMBER)) && (value_type == LUA_TTABLE)) {
 				// Add one dialog item
-				printf("PNU %p\n", lpw);
 				lpw = lpwAlign(lpw);    // Align DLGITEMTEMPLATE on DWORD boundary
-				printf("PNA %p\n", lpw);
 				lpdit = (LPDLGITEMTEMPLATE)lpw;
 
 				lpdit->x = 10; 
@@ -291,37 +371,70 @@ static int lua_InputBox(lua_State *L)
 				}
 				lua_pop(L, 1);
 
+				/* adjust dialog size */
+				lpdt->cx = MAX(lpdt->cx, lpdit->x + lpdit->cx + 10);
+				lpdt->cy = MAX(lpdt->cy, lpdit->y + lpdit->cy + 10);
+
 				/* type/class */
 				lpdt->cdit++;
-				lpdit->id = (lpdt->cdit);       // Item identifier
+				lpdit->id = 0;       // Item identifier
 				lpdit->style = WS_CHILD | WS_VISIBLE;
 				lpdit->dwExtendedStyle = 0;
-				if (lpdit->id == 1) lpdit->style |= BS_DEFPUSHBUTTON;
 
 				// see https://docs.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-dlgitemtemplate
 				WORD dlg_class = 0x0082;
 				if (!stricmp(itemtype, "button")) {
+					button_count++;
+					if (button_count == 1) {
+						lpdit->style |= BS_DEFPUSHBUTTON;
+					} else {
+						lpdit->style |= BS_PUSHBUTTON;
+					}
 					dlg_class = 0x0080;
+					lpdit->id = 0x1000 + button_count;
 				}
-				if (!stricmp(itemtype, "check")) {
+				if (!stricmp(itemtype, "check") || !stricmp(itemtype, "boolean")) {
+					input_count++;
 					dlg_class = 0x0080;
 					lpdit->style |= BS_AUTOCHECKBOX;
+					lpdit->id = input_count;
 				}
 				if (!stricmp(itemtype, "radio")) {
+					input_count++;
 					dlg_class = 0x0080;
 					lpdit->style |= BS_AUTORADIOBUTTON;
+					lpdit->id = input_count;
 				}
-				if (!stricmp(itemtype, "edit")) {
+				if (!stricmp(itemtype, "3state")) {
+					input_count++;
+					dlg_class = 0x0080;
+					lpdit->style |= BS_AUTO3STATE;
+					lpdit->id = input_count;
+				}
+				if (!stricmp(itemtype, "edit") || !stricmp(itemtype, "string")) {
+					input_count++;
 					dlg_class = 0x0081;
 					lpdit->style |= WS_BORDER | ES_AUTOHSCROLL;
+					lpdit->id = input_count;
+				}
+				if (!stricmp(itemtype, "text") || !stricmp(itemtype, "multiline")) {
+					input_count++;
+					dlg_class = 0x0081;
+					lpdit->style |= WS_BORDER | ES_AUTOHSCROLL | ES_MULTILINE;
+					lpdit->style |= ES_WANTRETURN | WS_VSCROLL | ES_AUTOVSCROLL;
+					lpdit->id = input_count;
 				}
 				if (!stricmp(itemtype, "number")) {
+					input_count++;
 					dlg_class = 0x0081;
 					lpdit->style |= WS_BORDER | ES_AUTOHSCROLL | ES_NUMBER;
+					lpdit->id = input_count;
 				}
-				if (!stricmp(itemtype, "static")) {
+				if (!stricmp(itemtype, "static") || !stricmp(itemtype, "label")) {
 					dlg_class = 0x0082;
 				}
+
+#if 0 // choose according to LUA data types, not Windows dialog types
 				if (!stricmp(itemtype, "list")) {
 					dlg_class = 0x0083;
 				}
@@ -331,6 +444,7 @@ static int lua_InputBox(lua_State *L)
 				if (!stricmp(itemtype, "combo")) {
 					dlg_class = 0x0085;
 				}
+#endif
 
 				lpw = (LPWORD)(lpdit + 1);
 				*lpw++ = 0xFFFF;
@@ -344,79 +458,21 @@ static int lua_InputBox(lua_State *L)
 			lua_pop(L, 1);
 		}
 	}
-	//-----------------------  
+
+	// Set heigth, if not defined  
 	if (lpdt->cy < 0) {
 		lpdt->cy = 20 + 20 * lpdt->cdit;
 	}
-
-#if 0
-	//-----------------------
-	// Define an OK button.
-	//-----------------------
-	lpw = lpwAlign(lpw);    // Align DLGITEMTEMPLATE on DWORD boundary
-	lpdit = (LPDLGITEMTEMPLATE)lpw;
-	lpdit->x = 10; lpdit->y = 70;
-	lpdit->cx = 80; lpdit->cy = 20;
-	lpdit->id = IDOK;       // OK button identifier
-	lpdit->style = WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON;
-
-	lpw = (LPWORD)(lpdit + 1);
-	*lpw++ = 0xFFFF;
-	*lpw++ = 0x0080;        // Button class
-
-	lpwsz = (LPWSTR)lpw;
-	nchar = 1 + MultiByteToWideChar(CP_ACP, 0, "OK", -1, lpwsz, 50);
-	lpw += nchar;
-	*lpw++ = 0;             // No creation data
-
-	//-----------------------
-	// Define a Help button.
-	//-----------------------
-	lpw = lpwAlign(lpw);    // Align DLGITEMTEMPLATE on DWORD boundary
-	lpdit = (LPDLGITEMTEMPLATE)lpw;
-	lpdit->x = 55; lpdit->y = 10;
-	lpdit->cx = 40; lpdit->cy = 20;
-	lpdit->id = ID_HELP;    // Help button identifier
-	lpdit->style = WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON;
-
-	lpw = (LPWORD)(lpdit + 1);
-	*lpw++ = 0xFFFF;
-	*lpw++ = 0x0080;        // Button class atom: https://docs.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-dlgitemtemplate
-
-	lpwsz = (LPWSTR)lpw;
-	nchar = 1 + MultiByteToWideChar(CP_ACP, 0, "Help", -1, lpwsz, 50);
-	lpw += nchar;
-	*lpw++ = 0;             // No creation data
-
-	//-----------------------
-	// Define a static text control.
-	//-----------------------
-	lpw = lpwAlign(lpw);    // Align DLGITEMTEMPLATE on DWORD boundary
-	lpdit = (LPDLGITEMTEMPLATE)lpw;
-	lpdit->x = 10; lpdit->y = 10;
-	lpdit->cx = 40; lpdit->cy = 20;
-	lpdit->id = ID_TEXT;    // Text identifier
-	lpdit->style = WS_CHILD | WS_VISIBLE | SS_LEFT;
-
-	lpw = (LPWORD)(lpdit + 1);
-	*lpw++ = 0xFFFF;
-	*lpw++ = 0x0082;        // Static class
-
-	const char*message = "bla";
-	for (lpwsz = (LPWSTR)lpw; *lpwsz++ = (WCHAR)*message++;);
-	lpw = (LPWORD)lpwsz;
-	*lpw++ = 0;             // No creation data
-#endif
 
 	GlobalUnlock(hgbl);
 	ret = DialogBoxIndirectParamA(hinst,
 		(LPDLGTEMPLATE)hgbl,
 		hwndOwner,
 		(DLGPROC)DialogProc,
-		&dlg_prm);
+		(LPARAM)&dlg_prm);
 	GlobalFree(hgbl);
 
-	return 0;
+	return dlg_prm.ret;
 }
 
 

@@ -8,7 +8,6 @@
 
 #include "lprefix.h"
 
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -146,6 +145,7 @@ static int docall (lua_State *L, int narg, int nres) {
 static void print_version (void) {
   lua_writestring(LUA_COPYRIGHT, strlen(LUA_COPYRIGHT));
   lua_writeline();
+  LUAPORTABLE4WINDOWS_PRINTVERSION();
 }
 
 

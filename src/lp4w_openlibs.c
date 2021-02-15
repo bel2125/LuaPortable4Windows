@@ -4,6 +4,7 @@
 extern int luaopen_lsqlite3(lua_State *L);
 extern int luaopen_crypto(lua_State *L);
 extern int luaopen_windows(lua_State *L);
+extern int luaopen_console(lua_State *L);
 
 
 static void po_elm(lua_State *L, int arg, int recurse) 
@@ -103,12 +104,20 @@ static int PO(lua_State *L)
 }
 
 
+void LUAPORTABLE4WINDOWS_PRINTVERSION()
+{
+	printf("Lua Portable for Windows (lp4w), V0.0, 2021\n");
+}
+
+
 void LUAPORTABLE4WINDOWS_OPENLIBS(lua_State *L) 
 {
+	printf("LP4W\n");
 	(void)luaopen_lfs(L);
 	(void)luaopen_lsqlite3(L);
 	(void)luaopen_crypto(L);
 	(void)luaopen_windows(L);
+	(void)luaopen_console(L);
 
 	lua_pushcfunction(L, PO);
 	lua_setglobal(L, "po");

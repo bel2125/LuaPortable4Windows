@@ -5,6 +5,7 @@
 
 #ifdef _MSC_VER
 #define strdup _strdup
+#define stricmp _stricmp
 #endif
 
 #include "lua_all.h"
@@ -712,7 +713,7 @@ static int lua_set_cipher_mode(lua_State *L)
 	BLOCKCYPHERBASE *pblock = (BLOCKCYPHERBASE *)lua_touserdata(L, 1);
 	const char *mode = lua_tostring(L, 2);
 
-	if (0 == strcmp(mode, "ECB")) {
+	if (0 == stricmp(mode, "ECB")) {
 		memset(pblock->init_vector, 0, sizeof(pblock->init_vector));
 		memset(pblock->counter, 0, sizeof(pblock->counter));
 		pblock->mode = mode_ECB;
@@ -732,7 +733,7 @@ static int lua_set_cipher_mode(lua_State *L)
 
 	int found_mode = -1;
 	for (int i = 0; i < mode_enum_count; i++) {
-		if (0 == strcmp(mode, mode_names[i])) {
+		if (0 == stricmp(mode, mode_names[i])) {
 			found_mode = i;
 			break;
 		}

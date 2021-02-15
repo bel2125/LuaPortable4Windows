@@ -317,7 +317,7 @@ static int lua_InputBox(lua_State *L)
 	*lpw++ = 0;             // Predefined dialog box class (by default)
 
 	lpwsz = (LPWSTR)lpw;
-	nchar = 1 + MultiByteToWideChar(CP_UTF8, 0, title, -1, lpwsz, 50);
+	nchar = 1 + MultiByteToWideChar(CP_UTF8, 0, title, -1, lpwsz, 100);
 	lpw += nchar;
 	lpdt->cdit = 0; // Number of items in dialog. Add them in a loop.
 

@@ -162,10 +162,13 @@ DialogProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 				if ((pdlg_proc_param->hWnd == hDlg) && (pdlg_proc_param->L != NULL)) {
 					// condition should always be true
 					lua_pushinteger(pdlg_proc_param->L, result);
-					pdlg_proc_param->ret = 1;
+					lua_newtable(pdlg_proc_param->L);
+					pdlg_proc_param->ret = 2;
+					int tabIndex = 0;
 
 					for (int i = 1; i < 0x1000; i++) {
 						HWND hItem = GetDlgItem(hDlg, i);
+						if (!hItem) break;
 						char className[32] = { 0 };
 						GetClassName(hItem, className, sizeof(className));
 
@@ -181,7 +184,7 @@ DialogProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 							else {
 								lua_pushnil(pdlg_proc_param->L);
 							}
-							pdlg_proc_param->ret++;
+							lua_rawseti(pdlg_proc_param->L, -2, ++tabIndex);
 
 						} else if (!stricmp(className, "Edit")) {
 
@@ -206,10 +209,10 @@ DialogProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 							} else {
 								lua_pushstring(pdlg_proc_param->L, utf8);
 							}
+							lua_rawseti(pdlg_proc_param->L, -2, ++tabIndex);
 
 							free(utf8);
 							free(utf16);
-							pdlg_proc_param->ret++;
 						}
 					}
 					// all parameters stored to Lua state

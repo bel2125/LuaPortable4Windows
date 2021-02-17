@@ -1,3 +1,4 @@
+#include <Windows.h>
 #include "lua_all.h"
 #include "lualib.h"
 #include "lfs/lfs.h"
@@ -112,7 +113,6 @@ void LUAPORTABLE4WINDOWS_PRINTVERSION()
 
 void LUAPORTABLE4WINDOWS_OPENLIBS(lua_State *L) 
 {
-	printf("LP4W\n");
 	(void)luaopen_lfs(L);
 	(void)luaopen_lsqlite3(L);
 	(void)luaopen_crypto(L);
@@ -122,3 +122,21 @@ void LUAPORTABLE4WINDOWS_OPENLIBS(lua_State *L)
 	lua_pushcfunction(L, PO);
 	lua_setglobal(L, "po");
 }
+
+
+lua_CFunction LUAPORTABLE4WINDOWS_MAIN(lua_CFunction defaultMain)
+{
+	wchar_t PATH[MAX_PATH+1] = { 0 };
+	GetModuleFileNameW(NULL, PATH, MAX_PATH);
+	HANDLE h = CreateFileW(PATH, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_FLAG_RANDOM_ACCESS, NULL);
+	LARGE_INTEGER seg = { 0,0 };
+	struct tfooter { DWORD len, inv, sig; } footer;
+	seg.QuadPart = -(ptrdiff_t)sizeof(footer);
+	SetFilePointerEx(h, seg, NULL, FILE_END);
+	DWORD bytes_read = 0;
+	ReadFile(h, &footer, sizeof(footer), &bytes_read, NULL);
+	CloseHandle(h);
+	return defaultMain;
+}
+
+

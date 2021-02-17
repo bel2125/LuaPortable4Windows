@@ -479,12 +479,68 @@ static int lua_InputBox(lua_State *L)
 }
 
 
+static int
+lua_GetTickCount(lua_State *L)
+{
+	ULONGLONG ull = GetTickCount64();
+	lua_pushinteger(L, ull);
+}
+
+
+static HMODULE rpc = NULL;
+static long (__stdcall *pUuidCreate)(UUID *) = NULL;
+
+static int
+lua_UUID(lua_State *L)
+{
+	UUID u;
+	char str[256];
+	memset(&u, 0, sizeof(u));
+	memset(&str, 0, sizeof(str));
+
+	if (rpc == NULL) {
+		rpc = LoadLibrary("Rpcrt4.dll");
+		pUuidCreate = GetProcAddress(rpc, "UuidCreate");
+	}
+
+	if (pUuidCreate == NULL) {
+		return luaL_error(L, "%s not available", __func__);
+	}
+	
+	pUuidCreate(&u);
+	sprintf(str, "%08X-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X", u.Data1, u.Data2, u.Data3, u.Data4[0], u.Data4[1], u.Data4[2], u.Data4[3], u.Data4[4], u.Data4[5], u.Data4[6], u.Data4[7]);
+
+	lua_pushstring(L, str);
+	return 1;
+}
+
+ 
+static int
+lua_GetTime(lua_State *L)
+{
+	static LARGE_INTEGER freq = { 0, 0 };
+	if (freq.QuadPart == 0) {
+		QueryPerformanceFrequency(&freq);
+	}
+
+	LARGE_INTEGER count;
+	QueryPerformanceCounter(&count);
+
+	double gettime = (double)count.QuadPart / (double)freq.QuadPart;
+	lua_pushnumber(L, gettime);
+	return 1;
+}
+
 
 static const struct luaL_Reg funclist[] = {
 	{ "MessageBox", lua_MessageBox },
 	{ "GetOpenFileName", lua_GetOpenFileName },
 	{ "GetSaveFileName", lua_GetSaveFileName },
 	{ "InputBox", lua_InputBox },
+
+	{ "GetTickCount", lua_GetTickCount },
+	{ "GUID", lua_UUID },
+	{ "GetTime", lua_GetTime },
 
 	{ NULL, NULL },
 };

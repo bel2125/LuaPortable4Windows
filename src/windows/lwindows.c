@@ -484,6 +484,7 @@ lua_GetTickCount(lua_State *L)
 {
 	ULONGLONG ull = GetTickCount64();
 	lua_pushinteger(L, ull);
+	return 1;
 }
 
 

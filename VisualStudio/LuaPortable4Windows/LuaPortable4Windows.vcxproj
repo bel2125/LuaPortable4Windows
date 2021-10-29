@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
       <Configuration>Debug</Configuration>
@@ -22,32 +22,32 @@
     <ProjectGuid>{FF876BFD-9CB2-4956-B087-18B86F581242}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>LuaPortable4Windows</RootNamespace>
-    <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.17763.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v141</PlatformToolset>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v141</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v141</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v141</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
@@ -87,11 +87,13 @@
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>LUA_COMPAT_MATHLIB;WIN32;_DEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>luai_userstatethread=Xluai_userstatethread;luai_userstatefree=Xluai_userstatefree;LUA_UCID;LUA_COMPAT_MATHLIB;WIN32;_DEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
       <AdditionalIncludeDirectories>$(ProjectDir)/../../src/;$(ProjectDir)/../../src/lua-5.4.2/src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeaderFile />
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <UndefinePreprocessorDefinitions>
+      </UndefinePreprocessorDefinitions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -120,11 +122,13 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>LUA_COMPAT_MATHLIB;WIN32;NDEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>luai_userstatethread=Xluai_userstatethread;luai_userstatefree=Xluai_userstatefree;LUA_UCID;LUA_COMPAT_MATHLIB;WIN32;NDEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
       <AdditionalIncludeDirectories>$(ProjectDir)/../../src/;$(ProjectDir)/../../src/lua-5.4.2/src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeaderFile />
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <UndefinePreprocessorDefinitions>
+      </UndefinePreprocessorDefinitions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -161,8 +165,8 @@
     <ClCompile Include="..\..\src\crypto-algorithms\md2.c" />
     <ClCompile Include="..\..\src\crypto-algorithms\md5.c" />
     <ClCompile Include="..\..\src\crypto-algorithms\rot-13.c" />
+    <ClCompile Include="..\..\src\crypto-algorithms\sha-2.c" />
     <ClCompile Include="..\..\src\crypto-algorithms\sha1.c" />
-    <ClCompile Include="..\..\src\crypto-algorithms\sha256.c" />
     <ClCompile Include="..\..\src\lfs\lfs.c" />
     <ClCompile Include="..\..\src\lp4w_openlibs.c" />
     <ClCompile Include="..\..\src\lsqlite\lsqlite3.c" />
@@ -200,6 +204,7 @@
     <ClCompile Include="..\..\src\lua-5.4.2\src\lvm.c" />
     <ClCompile Include="..\..\src\lua-5.4.2\src\lzio.c" />
     <ClCompile Include="..\..\src\lua.c" />
+    <ClCompile Include="..\..\src\shared\shared.c" />
     <ClCompile Include="..\..\src\windows\lconsole.c" />
     <ClCompile Include="..\..\src\windows\lwindows.c" />
   </ItemGroup>
@@ -212,8 +217,8 @@
     <ClInclude Include="..\..\src\crypto-algorithms\md2.h" />
     <ClInclude Include="..\..\src\crypto-algorithms\md5.h" />
     <ClInclude Include="..\..\src\crypto-algorithms\rot-13.h" />
+    <ClInclude Include="..\..\src\crypto-algorithms\sha-2.h" />
     <ClInclude Include="..\..\src\crypto-algorithms\sha1.h" />
-    <ClInclude Include="..\..\src\crypto-algorithms\sha256.h" />
     <ClInclude Include="..\..\src\lfs\lfs.h" />
     <ClInclude Include="..\..\src\lsqlite\sqlite3.h" />
     <ClInclude Include="..\..\src\lua-5.4.2\src\lapi.h" />

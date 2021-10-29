@@ -28,6 +28,9 @@
     <Filter Include="Source Files\windows">
       <UniqueIdentifier>{907a7aa2-82e8-42f4-b170-767f769ad57e}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\shared">
+      <UniqueIdentifier>{caa9434b-6704-4622-ba73-ea65901f094e}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\lua-5.4.2\src\lapi.c">
@@ -168,9 +171,6 @@
     <ClCompile Include="..\..\src\crypto-algorithms\sha1.c">
       <Filter>Source Files\crypto</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\crypto-algorithms\sha256.c">
-      <Filter>Source Files\crypto</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\crypto-algorithms\lcrypto.c">
       <Filter>Source Files\crypto</Filter>
     </ClCompile>
@@ -179,6 +179,12 @@
     </ClCompile>
     <ClCompile Include="..\..\src\windows\lconsole.c">
       <Filter>Source Files\windows</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\shared\shared.c">
+      <Filter>Source Files\shared</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\crypto-algorithms\sha-2.c">
+      <Filter>Source Files\crypto</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -299,7 +305,7 @@
     <ClInclude Include="..\..\src\crypto-algorithms\sha1.h">
       <Filter>Source Files\crypto</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\src\crypto-algorithms\sha256.h">
+    <ClInclude Include="..\..\src\crypto-algorithms\sha-2.h">
       <Filter>Source Files\crypto</Filter>
     </ClInclude>
   </ItemGroup>

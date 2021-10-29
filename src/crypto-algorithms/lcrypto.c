@@ -18,7 +18,8 @@
 #include "md2.h"
 #include "md5.h"
 #include "sha1.h"
-#include "sha256.h"
+#include "sha-2.h"
+//#include "sha256.h"
 #include "rot-13.h"
 
 static const char * mode_names[] = { "EBC", "CBC", "PCBC", "CFB", "OFB", "CTR", "CTR-LE" };
@@ -1068,6 +1069,27 @@ static int lua_sha1(lua_State *L)
 }
 
 
+static int lua_sha224(lua_State *L)
+{
+	if (lua_type(L, 1) != LUA_TSTRING) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+
+	size_t in_len = 0;
+	const char *in = lua_tolstring(L, 1, &in_len);
+
+    BYTE buf[224/8];
+	struct sha224_state ctx;
+
+	sha224_init(&ctx);
+	sha224_process(&ctx, in, in_len);
+	sha224_done(&ctx, buf);
+
+	lua_pushlstring(L, buf, sizeof(buf));
+	return 1;
+}
+
+
 static int lua_sha256(lua_State *L)
 {
 	if (lua_type(L, 1) != LUA_TSTRING) {
@@ -1077,14 +1099,56 @@ static int lua_sha256(lua_State *L)
 	size_t in_len = 0;
 	const char *in = lua_tolstring(L, 1, &in_len);
 
-	BYTE buf[SHA256_BLOCK_SIZE];
-	SHA256_CTX ctx;
+    BYTE buf[256/8];
+	struct sha256_state ctx;
 
 	sha256_init(&ctx);
-	sha256_update(&ctx, in, in_len);
-	sha256_final(&ctx, buf);
+	sha256_process(&ctx, in, in_len);
+	sha256_done(&ctx, buf);
 
-	lua_pushlstring(L, buf, SHA256_BLOCK_SIZE);
+	lua_pushlstring(L, buf, sizeof(buf));
+	return 1;
+}
+
+
+static int lua_sha384(lua_State *L)
+{
+	if (lua_type(L, 1) != LUA_TSTRING) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+
+	size_t in_len = 0;
+	const char *in = lua_tolstring(L, 1, &in_len);
+
+    BYTE buf[384/8];
+	struct sha384_state ctx;
+
+	sha384_init(&ctx);
+	sha384_process(&ctx, in, in_len);
+	sha384_done(&ctx, buf);
+
+	lua_pushlstring(L, buf, sizeof(buf));
+	return 1;
+}
+
+
+static int lua_sha512(lua_State *L)
+{
+	if (lua_type(L, 1) != LUA_TSTRING) {
+		return luaL_error(L, "%s parameter error", __func__);
+	}
+
+	size_t in_len = 0;
+	const char *in = lua_tolstring(L, 1, &in_len);
+
+    BYTE buf[512/8];
+	struct sha512_state ctx;
+
+	sha512_init(&ctx);
+	sha512_process(&ctx, in, in_len);
+	sha512_done(&ctx, buf);
+
+	lua_pushlstring(L, buf, sizeof(buf));
 	return 1;
 }
 
@@ -1119,7 +1183,10 @@ static const struct luaL_Reg funclist[] = {
 	{ "md2", lua_md2 },
 	{ "md5", lua_md5 },
 	{ "sha1", lua_sha1 },
+	{ "sha224", lua_sha224 },
 	{ "sha256", lua_sha256 },
+	{ "sha384", lua_sha384 },
+	{ "sha512", lua_sha512 },
 
 	/* other */
 	{ "rot13", lua_rot13 },

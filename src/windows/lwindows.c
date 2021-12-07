@@ -243,7 +243,7 @@ DialogProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 LPWORD lpwAlign(LPWORD lpIn)
 {
 	ULONG align = 4;
-	return (LPWORD)(((((ULONG)lpIn) + 1) / align) * align);
+	return (LPWORD)(((((size_t)lpIn) + 1) / align) * align);
 }
 
 
